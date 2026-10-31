@@ -269,7 +269,24 @@ class Routes:
         if request is not None and getattr(request, "method", "GET").upper() == "POST":
             body = await self._body()
             return _ok(self._save_settings(schema, body))
-        return _ok(schema.describe(self.plugin))
+        data = schema.describe(self.plugin)
+        # 面板显示不够用时（比如「没有下拉」）得能一眼看出是没读到提供商，
+        # 还是前端拿到的还是旧版 JS。版本号+数量都放进去。
+        version_of = getattr(self.plugin, "_version", lambda: "")
+        count_of = getattr(self.plugin, "provider_choices", lambda: [])
+        embed_of = getattr(self.plugin, "embedding_choices", lambda: [])
+        data["diagnostics"] = {
+            "version": version_of(),
+            "providers": len(count_of()),
+            "embeddings": len(embed_of()),
+        }
+        self.plugin.journal.write(
+            "DEBUG", "settings.describe", "面板读取设置",
+            version=data["diagnostics"]["version"],
+            providers=data["diagnostics"]["providers"],
+            embeddings=data["diagnostics"]["embeddings"],
+        )
+        return _ok(data)
 
     def _save_settings(self, schema, body: dict) -> dict:
         """把表单值写进插件配置。

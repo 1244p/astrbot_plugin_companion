@@ -149,6 +149,15 @@ class SaveTest(unittest.TestCase):
         self.assertIn("extract_provider_id", data["errors"])
         self.assertEqual(self.plugin.cfg.extract_provider_id, "")
 
+    def test_diagnostics_reports_version_and_counts(self):
+        self.plugin._version = lambda: "0.1.8"
+        self.plugin.provider_choices = lambda: [{"value": "a", "label": "a"}]
+        self.plugin.embedding_choices = lambda: []
+        data = self.save({}, method="GET")["data"]
+        self.assertEqual(data["diagnostics"]["version"], "0.1.8")
+        self.assertEqual(data["diagnostics"]["providers"], 1)
+        self.assertEqual(data["diagnostics"]["embeddings"], 0)
+
 
 class ProviderChoiceTest(unittest.TestCase):
     """「提供商 ID」填成模型名是真实犯过的错：选不到 → 静默退回会话模型 → 烧钱。"""

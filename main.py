@@ -472,6 +472,17 @@ class CompanionPlugin(Star):
                 f"{self.cfg.care_daily_max}"
             )
             return
+        if head == "providers":
+            chat = self.provider_choices()
+            embed = self.embedding_choices()
+            lines = [f"抽取模型：{self.cfg.extract_provider_id or '（不指定，跟当前会话）'}",
+                     f"嵌入提供商：{self.cfg.embedding_provider_id or '（不指定，不存向量）'}",
+                     f"聊天提供商 {len(chat)} 个："]
+            lines += [f"  · {item['label']}" for item in chat] or ["  （没读到）"]
+            lines.append(f"嵌入提供商 {len(embed)} 个：")
+            lines += [f"  · {item['label']}" for item in embed] or ["  （没读到）"]
+            yield event.plain_result(chr(10).join(lines))
+            return
         if head == "logs":
             if tail and tail[0] == "clear":
                 removed = self.journal.clear()

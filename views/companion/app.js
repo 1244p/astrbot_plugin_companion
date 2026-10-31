@@ -393,6 +393,14 @@
       state.draft = {};
       state.fieldErrors = {};
       renderSettings();
+      var diag = (data && data.diagnostics) || null;
+      var box = $("set-diag");
+      if (box) {
+        box.textContent = diag
+          ? "v" + String(diag.version).replace(/^v/, "") +
+            " · 读到 " + diag.providers + " 个聊天提供商、" + diag.embeddings + " 个嵌入提供商"
+          : "";
+      }
     });
   }
 

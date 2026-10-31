@@ -2,6 +2,16 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.1.8] - 2026-10-31
+
+### 新增
+
+- 设置页顶部显示「版本 · 读到 N 个聊天提供商、M 个嵌入提供商」，一眼分清是「没读到提供商」还是「前端还是旧版 JS」。
+- `/memory providers` 命令：在聊天里列出插件实际探测到的聊天 / 嵌入提供商 ID，空列表会明确写「（没读到）」。
+
+### 修复
+
+- `settings` 接口返回 `diagnostics`（版本、两类提供商数量），并把结果写进 `settings.describe` 日志。
 ## [v0.1.7] - 2026-10-31
 
 对着真机设置页看出来的问题：「抽取模型 ID」被填成了 `siliconflow/Qwen/Qwen3-30B-A3B-Instruct-2507`、
