@@ -34,8 +34,6 @@ SCHEMA = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(scope, status)",
     "CREATE INDEX IF NOT EXISTS idx_facts_slot ON facts(scope, slot)",
-    # v2：任务被显式关闭的时间（0 表示还开着）。任务不再靠 superseded 表达完成。
-    "ALTER TABLE facts ADD COLUMN closed_at REAL NOT NULL DEFAULT 0",
     """
     CREATE TABLE IF NOT EXISTS persona (
         scope TEXT PRIMARY KEY,
@@ -75,7 +73,29 @@ SCHEMA = [
         check_reason TEXT NOT NULL DEFAULT ''
     )
     """,
+    # ⚠️ 只能往末尾追加。迁移靠 PRAGMA user_version 当列表下标，
+    # 插在中间会让「版本号已经越过那一位」的老库永远跑不到这条 SQL
+    # （v0.1.10 第一次发版就是这么漏的：新建库正常，升级库缺 closed_at）。
+    "ALTER TABLE facts ADD COLUMN closed_at REAL NOT NULL DEFAULT 0",
 ]
+
+
+# 兜底：即使版本号已被写坏（例如上面那种插错位置的情况），
+# 也按 PRAGMA table_info 把缺的列补上。SQL 里的列定义必须和 CREATE TABLE 一致。
+EXPECTED_COLUMNS = {
+    "facts": {"closed_at": "REAL NOT NULL DEFAULT 0"},
+    "persona": {
+        "last_evolve_at": "REAL NOT NULL DEFAULT 0",
+        "day_key": "TEXT NOT NULL DEFAULT ''",
+        "day_used": "REAL NOT NULL DEFAULT 0",
+    },
+    "care": {
+        "check_at": "REAL NOT NULL DEFAULT 0",
+        "check_reason": "TEXT NOT NULL DEFAULT ''",
+        "next_gap": "INTEGER NOT NULL DEFAULT 0",
+        "last_text": "TEXT NOT NULL DEFAULT ''",
+    },
+}
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -96,8 +116,28 @@ def migrate(conn: sqlite3.Connection) -> int:
     for index, sql in enumerate(SCHEMA[current:], start=current + 1):
         conn.executescript(sql)
         conn.execute(f"PRAGMA user_version={index}")
+    _ensure_columns(conn)
     conn.commit()
     return int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> list[str]:
+    """把 EXPECTED_COLUMNS 里缺的列补上，返回补了哪些。"""
+    added: list[str] = []
+    for table, columns in EXPECTED_COLUMNS.items():
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if not rows:
+            continue  # 表还没建（全新库走 SCHEMA 就够）
+        have = {row[1] for row in rows}
+        for name, ddl in columns.items():
+            if name in have:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+                added.append(f"{table}.{name}")
+            except sqlite3.OperationalError:
+                pass  # 并发下别人刚补过
+    return added
 
 
 def now() -> float:

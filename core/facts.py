@@ -490,6 +490,14 @@ class FactStore:
             "with_vector": int(agg["with_vec"] or 0),
         }
 
+    @staticmethod
+    def _cell(row: sqlite3.Row, name: str, default=None):
+        """后加的列在老库里可能还不存在；缺列只当默认值，不要整张表读不出来。"""
+        try:
+            return row[name]
+        except (IndexError, KeyError):
+            return default
+
     def _row(self, row: sqlite3.Row) -> Fact:
         return Fact(
             id=row["id"],
@@ -503,7 +511,7 @@ class FactStore:
             source=row["source"],
             status=row["status"],
             state=TASK_STATE_OF.get(row["status"], "doing") if row["kind"] == "task" else "doing",
-            closed_at=row["closed_at"],
+            closed_at=self._cell(row, "closed_at", 0.0) or 0.0,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             hits=row["hits"],

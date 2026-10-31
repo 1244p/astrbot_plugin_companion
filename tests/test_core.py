@@ -458,6 +458,52 @@ class TaskEntityTest(unittest.TestCase):
         live = self.store.list_facts(self.scope, status="live")
         self.assertEqual([f.id for f in live], [fact.id])
 
+class MigrationTest(unittest.TestCase):
+    """老库升级：v0.1.10 曾把 ALTER 插在 SCHEMA 中间，老库永远跑不到 → 面板报
+    「No item with that key」。这里锁住「只在末尾追加 + 兜底补列」。"""
+
+    def test_old_database_gets_closed_at(self):
+        handle, path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        conn = db.sqlite3.connect(path)
+        # 模拟 v0.1.9 的库：SCHEMA 里没有末尾那条 ALTER
+        legacy = [sql for sql in db.SCHEMA if "closed_at" not in sql]
+        for sql in legacy:
+            conn.executescript(sql)
+        conn.execute(f"PRAGMA user_version={len(legacy)}")
+        conn.commit()
+        conn.close()
+
+        migrated = db.connect(path)
+        columns = {row[1] for row in migrated.execute("PRAGMA table_info(facts)")}
+        self.assertIn("closed_at", columns)
+        migrated.close()
+
+    def test_migrate_is_idempotent(self):
+        conn = temp_db()
+        first = db.migrate(conn)
+        second = db.migrate(conn)
+        self.assertEqual(first, second)
+        self.assertEqual(db._ensure_columns(conn), [])
+        conn.close()
+
+    def test_broken_version_number_still_gets_columns(self):
+        handle, path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        conn = db.sqlite3.connect(path)
+        for sql in db.SCHEMA:
+            conn.executescript(sql)
+        # 版本号写到列表长度之后（模拟被写坏的情况）
+        conn.execute(f"PRAGMA user_version={len(db.SCHEMA) + 5}")
+        conn.execute("ALTER TABLE facts DROP COLUMN closed_at")
+        conn.commit()
+        conn.close()
+
+        fixed = db.connect(path)
+        columns = {row[1] for row in fixed.execute("PRAGMA table_info(facts)")}
+        self.assertIn("closed_at", columns)
+        fixed.close()
+
 
 if __name__ == "__main__":
     unittest.main()

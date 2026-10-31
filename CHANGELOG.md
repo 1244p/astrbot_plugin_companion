@@ -2,6 +2,16 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.1.11] - 2026-10-31
+
+### 修复
+- 升级到 v0.1.10 后面板报 `加载失败：Error: facts 出错：No item with that key`，列表全空：`closed_at` 这条 `ALTER TABLE` 被插在迁移列表中间，而迁移靠 `PRAGMA user_version` 当列表下标，**版本号已经越过那一位的老库永远跑不到它**（新建库正常，升级库缺列）。
+- 迁移改成「只往末尾追加」，并加兜底 `_ensure_columns()`：按 `PRAGMA table_info` 补齐缺失列，即使版本号已经被写坏也能自愈。
+- `FactStore._row()` 读新增列时容错，缺列退默认值，不再让一条脏 schema 把整个面板拖空。
+
+### 为什么
+迁移的正确性不能依赖「列表长度刚好等于版本号」这种隐含约定。位置一挪，老库就静默缺列。
+
 ## [v0.1.10] - 2026-10-31
 
 ### 新增
