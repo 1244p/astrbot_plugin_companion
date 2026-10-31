@@ -42,7 +42,10 @@ class Routes:
     def __init__(self, plugin):
         self.plugin = plugin
         name = getattr(plugin, "PLUGIN_NAME", "") or PLUGIN_NAME
-        self.prefix = f"/{name}/api"
+        # 面板 bridge 会把 "scopes" 转发成 GET /api/v1/plugins/extensions/<插件名>/scopes，
+        # 框架再用 "/<subpath>" 去 `re.fullmatch` 已注册的路由（见 dashboard/api/plugins.py:209）：
+        # 所以注册路径必须是 "/<插件名>/<子路径>"，中间不能插 "api"。
+        self.prefix = f"/{name}"
 
     # ---------- 注册 ----------
 

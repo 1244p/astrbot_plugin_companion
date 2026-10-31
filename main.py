@@ -1,7 +1,7 @@
 """AstrBot 插件入口：只做框架接线，业务全在 core/。
 
 上一版 main.py 有 1230 行，钩子、SQL、提示词、HTTP 路由混在一起，改一处要
-读全文件。这里的分工是：plugin.py 认识 AstrBot，core/ 不认识。
+读全文件。这里的分工是：main.py 认识 AstrBot，core/ 不认识。
 """
 
 from __future__ import annotations
@@ -11,8 +11,7 @@ import os
 import random
 
 from astrbot.api import AstrBotConfig, logger
-from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.message import MessageChain
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star
 
@@ -72,6 +71,8 @@ class CompanionPlugin(Star):
         self._task: asyncio.Task | None = None
         self._seen: dict[str, dict] = {}
         self.routes = Routes(self)
+        # 不调这一句，面板拿到的每个接口都会是「未找到该路由」——页面能开，但一片空白。
+        self.routes.register()
         self.journal.write("INFO", "plugin.start", "插件已加载",
                            version=self._version(), scopes=len(self.service.known_scopes()))
         self._ensure_janitor()

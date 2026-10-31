@@ -102,10 +102,15 @@ python scripts/migrate_from_evo.py --old ./evo.db   --new /AstrBot/data/plugin_d
 ## 开发
 
 ```bash
-python -m unittest discover -s tests     # 60 条，纯 stdlib，不需要装 AstrBot
+python -m unittest discover -s tests      # 81 条，纯 stdlib，不需要装 AstrBot
+python scripts/preview_server.py --port 8140   # 不装 AstrBot 也能看面板
 ```
 
-`core/` 不 import astrbot——调模型、算向量、发消息都是注入的回调，所以业务逻辑可以裸跑测试。`plugin.py` 是唯一认识框架的文件。
+本地预览打开 `http://127.0.0.1:8140/index.html?tab=persona&dark=1`，四个页签和两套主题都能切；
+样例数据与线上接口同形状，改样式不用反复重启容器。
+
+`core/` 不 import astrbot——调模型、算向量、发消息都是注入的回调，所以业务逻辑可以裸跑测试。
+`main.py` 是唯一认识框架的文件；它必须调 `Routes(...).register()`，不调面板就是一片空白。
 
 ## 许可
 

@@ -220,7 +220,7 @@
     $("persona-log").innerHTML = rows.map(function (row) {
       var chips = Object.keys(row.deltas || {}).map(function (key) {
         var value = row.deltas[key];
-        if (Math.abs(value) < 0.001) return "";
+        if (Math.abs(value) < 0.005) return "";
         return '<span class="delta' + (value < 0 ? " down" : "") + '">' +
           (TRAITS[key] || key) + " " + (value > 0 ? "+" : "") +
           Math.round(value * 100) + "</span>";
@@ -299,7 +299,7 @@
           return key + "=" + value;
         }).join(" ");
         return '<li class="log">' +
-          '<span class="log-time">' + esc(String(row.time || "").slice(11)) + "</span>" +
+          '<span class="log-time">' + esc(timeText(row.ts || row.time)) + "</span>" +
           '<span class="log-level ' + esc(row.level) + '">' + esc(row.level) + "</span>" +
           '<span class="log-evt">' + esc(row.event) + "</span>" +
           '<span class="log-msg" title="' + esc(row.msg) + '">' + esc(row.msg) + "</span>" +
@@ -332,12 +332,7 @@
 
   function switchTab(tab) {
     state.tab = tab;
-    document.querySelectorAll(".tab").forEach(function (button) {
-      button.classList.toggle("on", button.dataset.tab === tab);
-    });
-    ["facts", "persona", "care", "logs"].forEach(function (name) {
-      $("panel-" + name).hidden = name !== tab;
-    });
+    syncTabs();
     refreshAll();
   }
 
@@ -415,9 +410,27 @@
     });
   }
 
+  function initialTab() {
+    // 面板 iframe 的地址不带 query，所以线上永远是 facts；这条只给本地预览用。
+    var match = /[?&]tab=([a-z]+)/.exec(window.location.search);
+    var name = match ? match[1] : "facts";
+    return ["facts", "persona", "care", "logs"].indexOf(name) >= 0 ? name : "facts";
+  }
+
+  function syncTabs() {
+    document.querySelectorAll(".tab").forEach(function (button) {
+      button.classList.toggle("on", button.dataset.tab === state.tab);
+    });
+    ["facts", "persona", "care", "logs"].forEach(function (name) {
+      $("panel-" + name).hidden = name !== state.tab;
+    });
+  }
+
   function start() {
+    state.tab = initialTab();
     bind();
     renderLogLevels();
+    syncTabs();
     var ready = bridge && bridge.ready ? bridge.ready() : Promise.resolve({});
     ready.then(function (info) {
       if (info && info.isDark) document.documentElement.dataset.theme = "dark";

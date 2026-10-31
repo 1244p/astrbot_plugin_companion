@@ -1,4 +1,7 @@
 /* 配色直接取 AstrBot Dashboard 的 token，避免插件页和宿主两套蓝。 */
+/* 这些组件都有自己的 display，会盖掉浏览器对 [hidden] 的默认处理，得显式压回去 */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #f7f9fb;
   --surface: #ffffff;
@@ -227,7 +230,8 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
   font-weight: 600;
   white-space: nowrap;
 }
-.content { word-break: break-word; }
+.content { word-break: break-word; color: var(--text); }
+html[data-theme="dark"] .content { color: #f1f3f4; }
 .fact-meta {
   margin-top: 4px;
   color: var(--muted);
@@ -411,21 +415,22 @@ html[data-theme="dark"] .meter { background: rgba(232, 234, 237, 0.16); }
 .log-stats { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
 .log-list { list-style: none; margin: 0; padding: 0; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
 .log {
-  display: flex;
+  display: grid;
+  grid-template-columns: 96px 48px 150px minmax(0, 1fr) minmax(0, 32%);
   align-items: center;
   gap: 10px;
   padding: 6px 4px;
   border-bottom: 1px solid var(--line);
 }
-.log-time { width: 76px; color: var(--muted); flex-shrink: 0; }
-.log-level { width: 42px; flex-shrink: 0; font-weight: 700; }
+.log-time { color: var(--muted); white-space: nowrap; }
+.log-level { font-weight: 700; }
 .log-level.INFO { color: var(--primary); }
 .log-level.WARN { color: var(--warn); }
 .log-level.ERROR { color: var(--danger); }
 .log-level.DEBUG { color: var(--muted); }
-.log-evt { width: 150px; flex-shrink: 0; color: var(--text); }
+.log-evt { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .log-msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.log-fields { max-width: 40%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-fields { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 
 /* ---------- 杂项 ---------- */
 .empty { color: var(--muted); text-align: center; padding: 32px 0; font-size: 13px; }
