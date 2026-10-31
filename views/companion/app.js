@@ -2,8 +2,30 @@
 (function () {
   "use strict";
 
-  var bridge = window.AstrBotPluginView || window.AstrBotPluginPage || null;
+  // 桥脚本是宿主在 </body> 前追加的，执行顺序在本文件之后——所以这里不能提前
+  // 取一次就定死。第一次拿不到就一直是 null，面板于是走 fetch 兜底，在受限 iframe
+  // 里抛 "Failed to fetch"，页面全空。
+  var bridgeRef = null;
+
+  function bridge() {
+    if (!bridgeRef) {
+      bridgeRef = window.AstrBotPluginView || window.AstrBotPluginPage || null;
+    }
+    return bridgeRef;
+  }
+
+  function waitForBridge(timeoutMs) {
+    return new Promise(function (resolve) {
+      var deadline = Date.now() + (timeoutMs || 3000);
+      (function poll() {
+        if (bridge()) return resolve(bridge());
+        if (Date.now() > deadline) return resolve(null);
+        setTimeout(poll, 50);
+      })();
+    });
+  }
   var API = "";
+  var PLUGIN = "astrbot_plugin_companion";
 
   var state = {
     scope: "",
@@ -42,11 +64,13 @@
   }
 
   function api(path, params) {
-    var call = bridge && bridge.apiGet
-      ? bridge.apiGet(API + path, params || {})
+    var b = bridge();
+    var call = b && b.apiGet
+      ? b.apiGet(API + path, params || {})
       : (function () {
           var query = new URLSearchParams(params || {}).toString();
-          return fetch(API + path + (query ? "?" + query : "")).then(function (r) {
+          var url = "/api/v1/plugins/extensions/" + PLUGIN + "/" + path;
+          return fetch(url + (query ? "?" + query : "")).then(function (r) {
             return r.json();
           });
         })();
@@ -54,9 +78,10 @@
   }
 
   function post(path, body) {
-    var call = bridge && bridge.apiPost
-      ? bridge.apiPost(API + path, body || {})
-      : fetch(API + path, {
+    var b = bridge();
+    var call = b && b.apiPost
+      ? b.apiPost(API + path, body || {})
+      : fetch("/api/v1/plugins/extensions/" + PLUGIN + "/" + path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body || {}),
@@ -449,19 +474,27 @@
     bind();
     renderLogLevels();
     syncTabs();
-    // 宿主的 ready() 要等父窗口发来 context 消息才 resolve。如果那条消息比本脚本的
-    // 监听器更早到（页面被缓存、iframe 复用都会这样），它就永远等不到——页面于是
-    // 一直停在「正在读取…」。所以最多等 800ms，超时就用默认值继续拉数据。
-    var ready = bridge && bridge.ready ? bridge.ready() : Promise.resolve({});
-    var timeout = new Promise(function (resolve) {
-      setTimeout(function () { resolve({}); }, 800);
-    });
-    if (bridge && bridge.onContext) {
-      bridge.onContext(function (info) {
-        if (info && info.isDark) document.documentElement.dataset.theme = "dark";
+    // 顺序很重要：先等桥（宿主的 bridge-sdk.js 注入在 </body>，晚于本文件执行），
+    // 再等 ready()。ready() 要等父窗口发 context 消息，那条消息也可能比监听器早到，
+    // 所以它自己有 800ms 兜底；两个等待分开，桥没到就直说，不要再往下走。
+    var ready = waitForBridge(3000).then(function (b) {
+      if (!b) {
+        $("hero-sub").textContent =
+          "没拿到宿主 bridge：面板无法调用接口（bridge-sdk.js 没加载成功）";
+        return {};
+      }
+      if (b.onContext) {
+        b.onContext(function (info) {
+          if (info && info.isDark) document.documentElement.dataset.theme = "dark";
+        });
+      }
+      var wait = b.ready ? b.ready() : Promise.resolve({});
+      var guard = new Promise(function (resolve) {
+        setTimeout(function () { resolve({}); }, 800);
       });
-    }
-    Promise.race([ready, timeout]).then(function (info) {
+      return Promise.race([wait, guard]);
+    });
+    ready.then(function (info) {
       if (info && info.isDark) document.documentElement.dataset.theme = "dark";
       return loadScopes();
     }).then(function () {

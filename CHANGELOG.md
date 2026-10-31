@@ -2,6 +2,22 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.1.4] - 2026-10-31
+
+真机上面板报 `面板出错：Failed to fetch`，四个页签仍然没有数据。
+
+### 修复
+
+- **桥取太早**：宿主的 `bridge-sdk.js` 是注入在 `</body>` 前的，执行顺序在本插件
+  `app.js` 之后。原来在脚本顶部一次性取 `window.AstrBotPluginView`，取到的是 `null`
+  并且一直用这个 `null`，于是每次请求都落到 `fetch` 兜底；而面板 iframe 是
+  `sandbox="allow-scripts ..."`（没有 `allow-same-origin`），相对地址请求被浏览器
+  拦成 `Failed to fetch`。
+  改成懒取 + 最多等 3 秒轮询；3 秒后仍没有桥，副标题直说「没拿到宿主 bridge」。
+- `ready()` 的 800ms 兜底只包 `ready()` 本身，不再和「等桥」混在一个 race 里。
+- 没有桥时的兜底地址改成绝对路径 `/api/v1/plugins/extensions/astrbot_plugin_companion/<path>`，
+  这样即使兜底失败，报的是真实的 401/404，而不是相对路径解析失败。
+
 ## [v0.1.3] - 2026-10-31
 
 上版面能开但四个页签全空、会话下拉一个选项都没有、右上角一直「正在读取…」。
