@@ -39,7 +39,11 @@ HELP = (
     "/memory persona      看人格五维\n"
     "/memory care on|off|status|now|why\n"
     "/memory logs [n]      看插件自己的日志\n"
-    "/memory settings      （面板里改更方便）" + chr(10) +    "/memory providers     看探测到的模型提供商" + chr(10) +    "/memory ui            面板自检：版本/路由/文件"
+    "/memory settings      （面板里改更方便）\n"
+    "/memory done <id>     把任务标记完成\n"
+    "/memory reopen <id>   重开一条已完成的任务\n"
+    "/memory providers     看探测到的模型提供商\n"
+    "/memory ui            面板自检：版本/路由/文件"
 )
 
 
@@ -417,6 +421,21 @@ class CompanionPlugin(Star):
             if result.get("raw"):
                 lines.append("模型原文：" + result["raw"][:200])
             yield event.plain_result("\n".join(lines))
+            return
+        if head in {"done", "reopen"} and tail:
+            ids = [int(x) for x in tail if x.isdigit()]
+            if not ids:
+                yield event.plain_result(
+                    "用法：/memory done <id>（标记完成）或 /memory reopen <id>（重开）"
+                )
+                return
+            state = "done" if head == "done" else "active"
+            changed = self.service.facts.close(scope, ids, state)
+            if not changed:
+                hint = "这些 id 里没有在办的任务" if head == "done" else "这些 id 里没有已完成的任务"
+                yield event.plain_result(f"没有改动：{hint}。")
+                return
+            yield event.plain_result(f"已{'标记完成' if head == 'done' else '重开'} {changed} 条。")
             return
         if head in {"forget", "confirm"} and tail:
             try:

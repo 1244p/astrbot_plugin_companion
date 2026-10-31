@@ -20,6 +20,9 @@ FACT_PROMPT = """从下面的对话里抽出值得长期记住的事实。
 1. 只记用户本人的稳定信息（偏好、习惯、身份、关系、在办的事、明确表态），不记助手说过的话。
 2. slot 是归一化槽位，同类信息必须用同一个词：饮食、作息、工作、居住、健康、家庭、兴趣、称呼、禁忌、在办事项。
 3. 状态变了（以前那样、现在这样）要用**相同的 slot** 输出新值，否则旧值盖不掉。
+3.1 kind=task（在办的事）额外给 state：doing 在做、done 做完了、cancelled 不做了。
+3.2 说「做完了/搞定了/不用了」时，**content 必须沿用之前那条任务的措辞**（同一件事同一句话），
+    只把 state 改成 done/cancelled；不要新造一句。任务之间互不覆盖，可以同时有好几件在办。
 4. polarity：喜欢 1，不喜欢 -1，中性 0；importance 1-5；confidence 0-1，推测不要超过 0.6。
 5. 没有可记的就输出 {"facts": []}。
 
@@ -47,6 +50,7 @@ __CONV__
 {"deltas": {"intimacy": 0.0, "playfulness": 0.0, "directness": 0.0, "initiative": 0.0, "warmth": 0.0}, "reason": "一句话说明依据"}"""
 
 KINDS = {"preference", "profile", "fact", "event", "task"}
+TASK_STATES = {"doing", "done", "cancelled"}
 MAX_CONTENT = 300
 
 
@@ -121,11 +125,15 @@ def sanitize_facts(raw: dict | None, max_facts: int = 8) -> tuple[list[dict], li
         kind = str(item.get("kind") or "fact").strip().lower()
         if kind not in KINDS:
             kind = "fact"
+        state = str(item.get("state") or "doing").strip().lower()
+        if state not in TASK_STATES:
+            state = "doing"
         kept.append(
             {
                 "slot": slot,
                 "content": content,
                 "kind": kind,
+                "state": state,
                 "importance": _clamp_int(item.get("importance"), 3, 1, 5),
                 "confidence": _clamp_float(item.get("confidence"), 0.7, 0.0, 1.0),
                 "polarity": _clamp_int(item.get("polarity"), 0, -1, 1),

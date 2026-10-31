@@ -12,7 +12,7 @@ import argparse
 import json
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIEW_DIR = os.path.join(ROOT, "views", "companion")
@@ -43,6 +43,14 @@ FACTS = [
     {"id": 11, "slot": "在办的事", "content": "在给 AstrBot 写陪伴插件，想加主动开口", "kind": "task",
      "importance": 5, "confidence": 0.88, "polarity": 0, "status": "active", "hits": 3,
      "updated_at": 1761890000, "vector_model": "Qwen/Qwen3-Embedding-0.6B", "has_vector": True},
+    {"id": 10, "slot": "在办的事", "content": "承诺插件测试完成后给对方充 token", "kind": "task",
+     "importance": 4, "confidence": 0.83, "polarity": 0, "status": "active", "hits": 1,
+     "state": "doing", "closed_at": 0, "updated_at": 1761885000,
+     "vector_model": "", "has_vector": False},
+    {"id": 5, "slot": "在办的事", "content": "把这周的测试跑完", "kind": "task",
+     "importance": 3, "confidence": 0.9, "polarity": 0, "status": "done", "hits": 2,
+     "state": "done", "closed_at": 1761850000, "updated_at": 1761850000,
+     "vector_model": "", "has_vector": False},
     {"id": 9, "slot": "作息", "content": "一般凌晨两点睡，早上十点起", "kind": "profile",
      "importance": 4, "confidence": 0.81, "polarity": 0, "status": "active", "hits": 11,
      "updated_at": 1761880000, "vector_model": "", "has_vector": False},
@@ -158,7 +166,13 @@ def payload(kind: str, body: dict) -> dict:
             {"label": "从未召回", "value": 1},
         ]}
     if kind == "facts":
-        return {"items": FACTS, "total": len(FACTS)}
+        status = body.get("status") or ""
+        rows = FACTS
+        if status == "live":
+            rows = [f for f in FACTS if f["status"] != "superseded"]
+        elif status:
+            rows = [f for f in FACTS if f["status"] == status]
+        return {"items": rows, "total": len(rows)}
     if kind == "persona":
         return PERSONA
     if kind == "care":
@@ -184,13 +198,21 @@ MOCK = """<script>
         locale: "zh-CN", i18n: {}, isDark: %DARK%});
     },
     apiGet: function (endpoint, params) {
-      var key = (endpoint || "").replace(/^\\/+/, "").split("?")[0];
-      return Promise.resolve(DATA[key] || {});
+      var key = String(endpoint || "").split("?")[0];
+      while (key.charAt(0) === "/") key = key.slice(1);
+      var query = new URLSearchParams(params || {}).toString();
+      return fetch("/__data/" + key + (query ? "?" + query : "")).then(function (r) {
+        return r.json();
+      });
     },
     apiPost: function (endpoint, body) {
-      var key = (endpoint || "").replace(/^\\/+/, "");
-      if (key === "care") return Promise.resolve(DATA.care_after_toggle || DATA.care);
-      return Promise.resolve({ok: true});
+      var key = String(endpoint || "").split("?")[0];
+      while (key.charAt(0) === "/") key = key.slice(1);
+      return fetch("/__data/" + key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      }).then(function (r) { return r.json(); });
     },
     download: function () { return Promise.resolve(); },
     upload: function () { return Promise.resolve({}); },
@@ -241,7 +263,34 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(raw)
             return
+        if path.startswith("/__data/"):
+            key = path[len("/__data/"):]
+            params = dict(parse_qs(parsed.query))
+            flat = {k: v[0] if len(v) == 1 else v for k, v in params.items()}
+            self._json(payload(key, flat))
+            return
         super().do_GET()
+
+    def do_POST(self):  # noqa: N802
+        parsed = urlparse(self.path)
+        if not parsed.path.startswith("/__data/"):
+            self.send_error(404)
+            return
+        key = parsed.path[len("/__data/"):]
+        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            body = {}
+        self._json(payload(key, body if isinstance(body, dict) else {}))
+
+    def _json(self, data: dict) -> None:
+        raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
 
 
 def main() -> int:

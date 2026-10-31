@@ -21,7 +21,7 @@ PLUGIN_NAME = "astrbot_plugin_companion"
 
 FACT_FIELDS = (
     "id", "slot", "content", "kind", "importance", "confidence", "polarity",
-    "status", "hits", "updated_at", "vector_model",
+    "status", "state", "closed_at", "hits", "updated_at", "vector_model",
 )
 
 
@@ -62,6 +62,7 @@ class Routes:
             "facts": (self.facts, ["GET"]),
             "facts/delete": (self.delete, ["POST"]),
             "facts/confirm": (self.confirm, ["POST"]),
+            "facts/close": (self.close, ["POST"]),
             "persona": (self.persona, ["GET"]),
             "care": (self.care, ["GET", "POST"]),
             "settings": (self.settings, ["GET", "POST"]),
@@ -212,6 +213,22 @@ class Routes:
         self.plugin.journal.write("INFO", "fact.delete", f"删除 {removed} 条",
                                   scope=scope, ids=",".join(map(str, ids)))
         return _ok({"ok": True, "removed": removed})
+
+    async def close(self):
+        body = await self._body()
+        scope = str(body.get("scope") or self._scope())
+        ids = [int(x) for x in body.get("ids") or [] if str(x).isdigit()]
+        state = str(body.get("state") or "done")
+        if state not in ("done", "cancelled", "active"):
+            state = "done"
+        if not scope or not ids:
+            return _ok({"ok": False, "error": "缺少 scope 或 ids"})
+        closed = self.plugin.service.facts.close(scope, ids, state)
+        self.plugin.journal.write(
+            "INFO", "task.close", f"关闭 {closed} 条任务",
+            scope=scope, ids=",".join(map(str, ids)), state=state,
+        )
+        return _ok({"ok": True, "closed": closed, "state": state})
 
     async def confirm(self):
         body = await self._body()

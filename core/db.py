@@ -34,6 +34,8 @@ SCHEMA = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(scope, status)",
     "CREATE INDEX IF NOT EXISTS idx_facts_slot ON facts(scope, slot)",
+    # v2：任务被显式关闭的时间（0 表示还开着）。任务不再靠 superseded 表达完成。
+    "ALTER TABLE facts ADD COLUMN closed_at REAL NOT NULL DEFAULT 0",
     """
     CREATE TABLE IF NOT EXISTS persona (
         scope TEXT PRIMARY KEY,

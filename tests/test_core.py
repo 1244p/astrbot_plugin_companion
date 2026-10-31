@@ -391,5 +391,73 @@ class JournalTest(unittest.TestCase):
         self.assertIn("a.b", Journal.text_line(record))
 
 
+class TaskEntityTest(unittest.TestCase):
+    """任务是多值实体：不该被下一条任务挤成「已被取代」。"""
+
+    def setUp(self):
+        self.conn = db.connect(":memory:")
+        self.cfg = Config.load({})
+        self.store = facts.FactStore(self.conn, self.cfg)
+        self.scope = "qq_official:FriendMessage:u1"
+
+    def tearDown(self):
+        self.conn.close()
+
+    def task(self, content, state="doing", slot="在办事项"):
+        return facts.Fact(scope=self.scope, slot=slot, content=content, kind="task", state=state)
+
+    def test_two_tasks_coexist(self):
+        self.store.write(self.task("在调试插件"))
+        self.store.write(self.task("承诺测试完成后给对方充 token"))
+        active = [f for f in self.store.list_facts(self.scope) if f.kind == "task"]
+        self.assertEqual(len(active), 2)
+        self.assertTrue(all(f.status == "active" for f in active))
+
+    def test_done_closes_the_matching_task(self):
+        first, _ = self.store.write(self.task("在调试插件"))
+        closed, action = self.store.write(self.task("在调试插件", state="done"))
+        self.assertEqual(action, "closed")
+        self.assertEqual(closed.id, first.id)
+        self.assertEqual(closed.status, "done")
+        self.assertGreater(closed.closed_at, 0)
+        self.assertEqual(len(self.store.list_facts(self.scope, status="done")), 1)
+
+    def test_done_for_unknown_task_lands_closed(self):
+        _, action = self.store.write(self.task("给猫打疫苗", state="done"))
+        self.assertEqual(action, "closed")
+        rows = self.store.list_facts(self.scope, status="done")
+        self.assertEqual(len(rows), 1)
+
+    def test_same_task_twice_is_duplicate(self):
+        self.store.write(self.task("在调试插件"))
+        _, action = self.store.write(self.task("在调试插件"))
+        self.assertEqual(action, "duplicate")
+
+    def test_manual_close_and_reopen(self):
+        fact, _ = self.store.write(self.task("在调试插件"))
+        self.assertEqual(self.store.close(self.scope, [fact.id], "done"), 1)
+        self.assertEqual(self.store.close(self.scope, [fact.id], "done"), 0)  # 幂等
+        self.assertEqual(self.store.close(self.scope, [fact.id], "active"), 1)
+        back = self.store.list_facts(self.scope, status="active")
+        self.assertEqual(back[0].id, fact.id)
+        self.assertEqual(back[0].closed_at, 0)
+
+    def test_live_filter_hides_superseded(self):
+        old, _ = self.store.write(self.task("在调试插件"))
+        self.store.write(self.task("在调试插件", state="done"))
+        self.store.write(self.task("给猫打疫苗"))
+        live = self.store.list_facts(self.scope, status="live")
+        self.assertEqual([f.id for f in live], [f.id for f in live])
+        self.assertTrue(all(f.status != "superseded" for f in live))
+        self.assertEqual(len(live), 2)
+        self.assertEqual(len(self.store.list_facts(self.scope)), 2)
+
+    def test_live_filter_includes_done_tasks(self):
+        fact, _ = self.store.write(self.task("在调试插件"))
+        self.store.close(self.scope, [fact.id], "done")
+        live = self.store.list_facts(self.scope, status="live")
+        self.assertEqual([f.id for f in live], [fact.id])
+
+
 if __name__ == "__main__":
     unittest.main()

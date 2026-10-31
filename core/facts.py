@@ -45,6 +45,8 @@ class Fact:
     vector_model: str = ""
     id: int = 0
     status: str = "active"
+    state: str = "doing"
+    closed_at: float = 0.0
     created_at: float = 0.0
     updated_at: float = 0.0
     hits: int = 0
@@ -119,6 +121,9 @@ def recency(updated_at: float, kind: str, at: float) -> float:
     return 0.5 ** (age_days / half_life)
 
 
+TASK_STATE_OF = {"done": "done", "closed": "done", "cancelled": "cancelled"}
+
+
 class FactStore:
     def __init__(self, conn: sqlite3.Connection, cfg: Config):
         self.conn = conn
@@ -133,6 +138,109 @@ class FactStore:
         ).fetchall()
         return [self._row(r) for r in rows]
 
+    TASK_STATUS_OF = {"done": "done", "cancelled": "cancelled"}
+    TASK_MATCH = 0.55
+
+    def _open_tasks(self, scope: str) -> list[Fact]:
+        rows = self.conn.execute(
+            "SELECT * FROM facts WHERE scope=? AND kind='task' AND status='active'"
+            " ORDER BY updated_at DESC",
+            (scope,),
+        ).fetchall()
+        return [self._row(r) for r in rows]
+
+    def _write_task(self, fact: Fact, stamp: float) -> tuple[Fact, str]:
+        """任务是多值的：同槽位不等于互斥，只有「同一件事」才互相影响。
+
+        - state=doing：内容几乎相同则算重复；否则新增，绝不覆盖别的任务
+        - state=done/cancelled：在**所有未完成任务**里找最像的一条关掉；
+          找不到就把它当成「一件已经结束、没登记过的事」直接落成已关闭
+        """
+        state = fact.state if fact.state in ("done", "cancelled") else "doing"
+        opening = self._open_tasks(fact.scope)
+
+        if state == "doing":
+            for old in opening:
+                if _norm(old.content) == _norm(fact.content) or overlap(old.content, fact.content) >= 0.9:
+                    self.conn.execute(
+                        "UPDATE facts SET hits=hits+1, last_hit_at=? WHERE id=?", (stamp, old.id)
+                    )
+                    self.conn.commit()
+                    old.hits += 1
+                    return old, "duplicate"
+            status, closed_at, action = "active", 0.0, "create"
+        else:
+            best, best_score = None, 0.0
+            for old in opening:
+                score = overlap(old.content, fact.content)
+                if score > best_score:
+                    best, best_score = old, score
+            if best is not None and best_score >= self.TASK_MATCH:
+                status = self.TASK_STATUS_OF[state]
+                self.conn.execute(
+                    "UPDATE facts SET status=?, closed_at=?, updated_at=? WHERE id=?",
+                    (status, stamp, stamp, best.id),
+                )
+                self.conn.commit()
+                best.status = status
+                best.closed_at = stamp
+                return best, "closed"
+            status, closed_at, action = self.TASK_STATUS_OF[state], stamp, "closed"
+
+        cursor = self.conn.execute(
+            """INSERT INTO facts
+               (scope, slot, content, kind, importance, confidence, polarity, status,
+                source, created_at, updated_at, closed_at, vector, vector_model)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                fact.scope,
+                fact.slot,
+                fact.content,
+                "task",
+                max(1, min(5, fact.importance)),
+                max(0.0, min(1.0, fact.confidence)),
+                0 if fact.polarity == 0 else (1 if fact.polarity > 0 else -1),
+                status,
+                fact.source[:200],
+                stamp,
+                stamp,
+                closed_at,
+                pack_vector(normalize(fact.vector) if fact.vector else None),
+                fact.vector_model[:60],
+            ),
+        )
+        self.conn.commit()
+        fact.id = int(cursor.lastrowid)
+        fact.status = status
+        fact.state = state
+        fact.closed_at = closed_at
+        fact.created_at = stamp
+        fact.updated_at = stamp
+        return fact, action
+
+    def close(self, scope: str, ids: list[int], state: str = "done") -> int:
+        """关闭或重开任务（面板「完成/重开」按钮、`/memory done`）。
+
+        state=done/cancelled 只作用于还在办的任务；state=active 是「重开」，
+        只作用于已关闭的任务——两个方向都幂等，点错不会把状态搅乱。
+        """
+        marks = ",".join("?" * len(ids))
+        if state == "active":
+            cursor = self.conn.execute(
+                f"UPDATE facts SET status='active', closed_at=0, updated_at=? WHERE scope=?"
+                f" AND kind='task' AND status IN ('done','cancelled') AND id IN ({marks})",
+                [db.now(), scope, *ids],
+            )
+        else:
+            status = self.TASK_STATUS_OF.get(state, "done")
+            cursor = self.conn.execute(
+                f"UPDATE facts SET status=?, closed_at=?, updated_at=? WHERE scope=?"
+                f" AND kind='task' AND status='active' AND id IN ({marks})",
+                [status, db.now(), db.now(), scope, *ids],
+            )
+        self.conn.commit()
+        return cursor.rowcount
+
     def write(self, fact: Fact) -> tuple[Fact, str]:
         """返回 (落库后的事实, 动作)。动作 ∈ create/replace/suspect/duplicate。"""
         fact.content = fact.content.strip()[:300]
@@ -141,6 +249,8 @@ class FactStore:
         if fact.kind not in KINDS:
             fact.kind = "fact"
         stamp = db.now()
+        if fact.kind == "task":
+            return self._write_task(fact, stamp)
         existing = self.active_slot(fact.scope, fact.slot)
 
         for old in existing:
@@ -231,7 +341,11 @@ class FactStore:
         if kind:
             sql += " AND kind=?"
             args.append(kind)
-        if status:
+        if status == "live":
+            # 「有效」= 没被取代的一切：在办、已完成、已取消、待确认。
+            # 被取代的旧值只在选「全部」时出现，否则翻列表全是历史噪音。
+            sql += " AND status!='superseded'"
+        elif status:
             sql += " AND status=?"
             args.append(status)
         if query:
@@ -388,6 +502,8 @@ class FactStore:
             polarity=row["polarity"],
             source=row["source"],
             status=row["status"],
+            state=TASK_STATE_OF.get(row["status"], "doing") if row["kind"] == "task" else "doing",
+            closed_at=row["closed_at"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             hits=row["hits"],

@@ -1,5 +1,5 @@
 /* 面板前端：只依赖宿主注入的 window.AstrBotPluginView，不引第三方库。 */
-window.__companionBuild = "0.1.9";
+window.__companionBuild = "0.1.10";
 
 (function () {
   "use strict";
@@ -203,12 +203,14 @@ window.__companionBuild = "0.1.9";
       return '<li class="fact' + (picked ? " picked" : "") + '" data-id="' + fact.id + '">' +
         '<input type="checkbox" ' + (picked ? "checked" : "") + ' data-pick="' + fact.id + '" />' +
         '<div class="fact-body">' +
-          '<div class="fact-line"><span class="slot-chip">' + esc(fact.slot) + "</span>" +
+          '<div class="fact-line"><span class="slot-chip">' +
+          esc(fact.kind === "task" ? "任务" : fact.slot) + "</span>" +
           '<span class="content">' + esc(fact.content) + "</span></div>" +
           '<div class="fact-meta"><span>#' + fact.id + "</span><span>重要度 " +
           fact.importance + "</span><span>置信 " + fact.confidence.toFixed(2) +
           "</span><span>召回 " + fact.hits + " 次</span><span>" +
-          timeText(fact.updated_at) + "</span>" +
+          timeText(fact.status === "done" && fact.closed_at ? fact.closed_at : fact.updated_at) +
+          "</span>" +
           (fact.has_vector ? "<span>有向量</span>" : "<span>无向量</span>") + "</div>" +
         "</div>" +
         '<div class="fact-side"><span class="pill ' + esc(fact.status) + '">' +
@@ -217,6 +219,12 @@ window.__companionBuild = "0.1.9";
           (fact.status === "suspect"
             ? '<button class="row-btn" data-act="confirm" data-id="' + fact.id + '">确认</button>'
             : "") +
+          (fact.kind === "task" && fact.status === "active"
+            ? '<button class="row-btn" data-act="close" data-id="' + fact.id + '">完成</button>'
+            : "") +
+          (fact.kind === "task" && fact.status === "done"
+            ? '<button class="row-btn" data-act="reopen" data-id="' + fact.id + '">重开</button>'
+            : "") +
           '<button class="row-btn danger" data-act="delete" data-id="' + fact.id + '">删除</button>' +
         "</span></div></li>";
     }).join("");
@@ -224,7 +232,10 @@ window.__companionBuild = "0.1.9";
   }
 
   function statusText(status) {
-    return { active: "生效中", suspect: "待确认", superseded: "已被取代" }[status] || status;
+    return {
+      active: "生效中", suspect: "待确认", superseded: "已被取代",
+      done: "已完成", cancelled: "已取消",
+    }[status] || status;
   }
 
   function syncBulk() {
@@ -239,10 +250,18 @@ window.__companionBuild = "0.1.9";
     });
   }
 
+  var ACT_PATH = {
+    delete: "facts/delete", confirm: "facts/confirm",
+    close: "facts/close", reopen: "facts/close",
+  };
+
   function act(ids, kind) {
     if (!ids.length) return;
-    var path = kind === "delete" ? "facts/delete" : "facts/confirm";
-    post(path, { scope: state.scope, ids: ids }).then(function (data) {
+    var path = ACT_PATH[kind] || "facts/confirm";
+    var body = { scope: state.scope, ids: ids };
+    if (kind === "close") body.state = "done";
+    if (kind === "reopen") body.state = "active";
+    post(path, body).then(function (data) {
       var payload = (data && data.data) || data || {};
       if (payload.ok === false) {
         toast(payload.error || "操作失败");
@@ -250,7 +269,11 @@ window.__companionBuild = "0.1.9";
       }
       toast(kind === "delete"
         ? "删除 " + (payload.removed || 0) + " 条"
-        : "确认 " + (payload.changed || 0) + " 条");
+        : kind === "close"
+          ? "完成 " + (payload.closed || 0) + " 条"
+          : kind === "reopen"
+            ? "重开 " + (payload.closed || 0) + " 条"
+            : "确认 " + (payload.changed || 0) + " 条");
       state.picked.clear();
       refreshAll();
     });

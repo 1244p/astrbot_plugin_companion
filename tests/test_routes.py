@@ -106,7 +106,7 @@ class RegisterTest(unittest.TestCase):
         self.plugin.close()
 
     def test_registers_every_endpoint(self):
-        self.assertEqual(self.count, 10)
+        self.assertEqual(self.count, 11)
         paths = sorted(route for route, *_ in self.plugin.context.registered)
         self.assertEqual(
             paths,
@@ -114,7 +114,7 @@ class RegisterTest(unittest.TestCase):
                 f"/{PLUGIN}/{name}"
                 for name in (
                     "scopes", "overview", "facts", "facts/delete", "facts/confirm",
-                    "persona", "care", "settings", "logs", "logs/clear",
+                    "facts/close", "persona", "care", "settings", "logs", "logs/clear",
                 )
             ),
         )

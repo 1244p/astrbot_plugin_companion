@@ -63,6 +63,7 @@ class Service:
             "written": 0,
             "replaced": 0,
             "suspect": 0,
+            "closed": 0,
             "dropped": [],
             "persona": {},
             "raw": "",
@@ -105,6 +106,7 @@ class Service:
                 importance=item["importance"],
                 confidence=item["confidence"],
                 polarity=item["polarity"],
+                state=item.get("state", "doing"),
                 source=reason,
             )
             try:
@@ -118,6 +120,8 @@ class Service:
                 result["replaced"] += 1
             if action == "suspect":
                 result["suspect"] += 1
+            if action == "closed":
+                result["closed"] = result.get("closed", 0) + 1
             self.journal.write("INFO", "fact.write", fact.content[:60],
                                slot=fact.slot, action=action, id=fact.id)
 

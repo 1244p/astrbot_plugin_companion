@@ -34,6 +34,8 @@ git clone https://github.com/1244p/astrbot_plugin_companion
 | `/memory extract go` | 立刻抽一次并写库 |
 | `/memory forget <id>` | 删除一条（物理删，不复活） |
 | `/memory confirm <id>` | 把待确认的冲突条目认下来 |
+| `/memory done <id>` | 把一条在办任务标记完成 |
+| `/memory reopen <id>` | 重开一条已完成 / 已取消的任务 |
 | `/memory persona` | 五维当前值与基线 |
 | `/memory care on\|off` | 这个会话的主动消息开关 |
 | `/memory care status\|why\|now` | 状态 / 为什么没发 / 手动发一次 |
