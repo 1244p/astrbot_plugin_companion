@@ -11,7 +11,7 @@ from typing import Awaitable, Callable
 
 from . import care, extract, persona
 from .config import Config
-from .facts import Fact, FactStore, render_block
+from .facts import Fact, FactStore, normalize_task_kind, render_block
 from .journal import Journal
 from .state import CareRepo, PersonaRepo, known_scopes
 
@@ -27,6 +27,7 @@ class Service:
         self.journal = journal
         self.ask = ask
         self.embed = embed
+        normalize_task_kind(conn)  # 老库里 kind 记成 fact 的任务，就地纠正成 task
         self.facts = FactStore(conn, cfg)
         self.people = PersonaRepo(conn, cfg)
         self.care = CareRepo(conn, cfg)

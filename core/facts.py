@@ -514,10 +514,29 @@ class FactStore:
             closed_at=self._cell(row, "closed_at", 0.0) or 0.0,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            vector=unpack_vector(self._cell(row, "vector", None)),
             hits=row["hits"],
             last_hit_at=row["last_hit_at"],
             vector_model=row["vector_model"],
         )
+
+
+TASK_SLOT_HINTS = ("在办", "任务", "待办", "todo", "doing")
+
+
+def normalize_task_kind(conn: sqlite3.Connection) -> int:
+    """把老库里「内容是任务、但 kind 记成 fact」的行纠正成 task。
+
+    v0.1.9 及以前抽取只保证 slot 归一（「在办的事」），kind 往往落成默认 fact；
+    这些行在面板上看不到「完成」，也不会参与 task 的多值写入。幂等。
+    """
+    clauses = " OR ".join("slot LIKE ?" for _ in TASK_SLOT_HINTS)
+    params = [f"%{hint}%" for hint in TASK_SLOT_HINTS]
+    cursor = conn.execute(
+        f"UPDATE facts SET kind='task' WHERE kind!='task' AND ({clauses})", params
+    )
+    conn.commit()
+    return cursor.rowcount
 
 
 def render_block(facts: list[Fact], max_chars: int) -> str:

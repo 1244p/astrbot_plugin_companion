@@ -504,6 +504,39 @@ class MigrationTest(unittest.TestCase):
         self.assertIn("closed_at", columns)
         fixed.close()
 
+class LegacyKindTest(unittest.TestCase):
+    """老库里「在办的事」被记成 kind=fact：面板看不到完成按钮，也不参与多值写入。"""
+
+    def test_legacy_task_becomes_task_kind(self):
+        conn = temp_db()
+        cfg = Config.load({})
+        store = facts.FactStore(conn, cfg)
+        # 直接插一条 v0.1.9 形状的行（kind 落成默认 fact）
+        conn.execute(
+            "INSERT INTO facts (scope, slot, content, kind, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?)",
+            ("qq:friend:abc", "在办的事", "在调试插件", "fact", 1.0, 1.0),
+        )
+        conn.commit()
+
+        changed = facts.normalize_task_kind(conn)
+        self.assertEqual(changed, 1)
+        self.assertEqual(store.list_facts("qq:friend:abc")[0].kind, "task")
+        # 幂等
+        self.assertEqual(facts.normalize_task_kind(conn), 0)
+        conn.close()
+
+    def test_row_carries_vector_flag(self):
+        conn = temp_db()
+        cfg = Config.load({})
+        store = facts.FactStore(conn, cfg)
+        store.write(facts.Fact(scope="s1", slot="饮食", content="不吃香菜", kind="preference",
+                               importance=4, confidence=0.9, polarity=-1,
+                               vector=facts.normalize([1.0, 0.0]), vector_model="m"))
+        row = store.list_facts("s1")[0]
+        self.assertIsNotNone(row.vector)
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()
