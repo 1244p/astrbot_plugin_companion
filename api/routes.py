@@ -279,6 +279,15 @@ class Routes:
         """
         current = schema.describe(self.plugin)
         values, errors = schema.validate(schema.load_schema(), body)
+        # 提供商 ID 写成模型名（`siliconflow/Qwen/...`）时插件会静默退回会话模型：
+        # 不报错、但抽取开始烧主模型的额度。这里直接把不存在的 ID 拦在保存前。
+        for key in schema.CHOICE_KEYS:
+            value = str(values.get(key, "") or "")
+            if not value:
+                continue
+            known = schema.known_values(self.plugin, key)
+            if known and value not in known:
+                errors[key] = "没有这个提供商，请在列表里选"
         if errors:
             return {"ok": False, "errors": errors, "settings": current, "changed": []}
 

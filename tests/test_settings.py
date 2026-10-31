@@ -141,6 +141,62 @@ class SaveTest(unittest.TestCase):
         self.assertIn("db_path", data["restart"])
         self.assertEqual(self.plugin.cfg.db_path, "other.db")
 
+    def test_unknown_provider_id_is_rejected(self):
+        self.plugin.provider_choices = lambda: [{"value": "siliconflow-memory-tidy",
+                                                 "label": "siliconflow-memory-tidy · x"}]
+        data = self.save({"extract_provider_id": "siliconflow/Qwen/Qwen3-30B"})["data"]
+        self.assertFalse(data["ok"])
+        self.assertIn("extract_provider_id", data["errors"])
+        self.assertEqual(self.plugin.cfg.extract_provider_id, "")
+
+
+class ProviderChoiceTest(unittest.TestCase):
+    """「提供商 ID」填成模型名是真实犯过的错：选不到 → 静默退回会话模型 → 烧钱。"""
+
+    def make(self, chat=None, embed=None, value=""):
+        plugin = FakePlugin()
+        plugin.raw_config = DictConfig()
+        plugin.cfg = Config.load({"extract_provider_id": value,
+                                  "embedding_provider_id": value})
+        if chat is not None:
+            plugin.provider_choices = lambda: chat
+        if embed is not None:
+            plugin.embedding_choices = lambda: embed
+        return plugin
+
+    def fields(self, plugin):
+        return {f["key"]: f for group in schema.describe(plugin)["groups"] for f in group["fields"]}
+
+    def test_options_include_empty_and_known_ids(self):
+        plugin = self.make(chat=[{"value": "siliconflow-memory-tidy",
+                                  "label": "siliconflow-memory-tidy · Qwen/Qwen3-30B"}])
+        try:
+            options = self.fields(plugin)["extract_provider_id"]["options"]
+            values = [o["value"] for o in options]
+            self.assertEqual(values[0], "")
+            self.assertIn("siliconflow-memory-tidy", values)
+        finally:
+            plugin.close()
+
+    def test_unknown_saved_value_is_flagged_not_hidden(self):
+        plugin = self.make(chat=[{"value": "a", "label": "a"}],
+                           value="siliconflow/Qwen/Qwen3-30B")
+        try:
+            options = self.fields(plugin)["extract_provider_id"]["options"]
+            labels = {o["value"]: o["label"] for o in options}
+            self.assertIn("siliconflow/Qwen/Qwen3-30B", labels)
+            self.assertIn("没有这个提供商", labels["siliconflow/Qwen/Qwen3-30B"])
+        finally:
+            plugin.close()
+
+    def test_no_provider_list_falls_back_to_text_input(self):
+        plugin = self.make(chat=[])
+        try:
+            field = self.fields(plugin)["extract_provider_id"]
+            self.assertNotIn("options", field)
+        finally:
+            plugin.close()
+
 
 if __name__ == "__main__":
     unittest.main()

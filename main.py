@@ -224,6 +224,50 @@ class CompanionPlugin(Star):
             pass
         return [i for i in ids if i]
 
+    # ---------- 面板下拉选项 ----------
+
+    def provider_choices(self) -> list[dict]:
+        """给面板用的聊天提供商列表（ID + 模型名）。
+
+        配置里这两项本来是自由文本，用户很自然会把模型名（`siliconflow/Qwen/...`）
+        填进「ID」里，然后插件找不到提供商，静默退回会话模型——既不报错，钱还照烧。
+        面板改成下拉之后，这类错误在选的那一刻就不该发生。
+        """
+        out = []
+        try:
+            for item in self.context.get_all_providers():
+                config = getattr(item, "provider_config", None) or {}
+                pid = str(config.get("id", "") or "")
+                if not pid:
+                    continue
+                model = ""
+                try:
+                    model = str(item.get_model() or "")
+                except Exception:  # noqa: BLE001
+                    model = str(config.get("model", "") or "")
+                out.append({"value": pid, "label": f"{pid} · {model}" if model else pid})
+        except Exception:  # noqa: BLE001
+            return []
+        return out
+
+    def embedding_choices(self) -> list[dict]:
+        out = []
+        try:
+            for item in self.context.get_all_embedding_providers():
+                config = getattr(item, "provider_config", None) or {}
+                pid = str(config.get("id", "") or "")
+                if not pid:
+                    continue
+                model = ""
+                try:
+                    model = str(item.get_model() or "")
+                except Exception:  # noqa: BLE001
+                    model = str(config.get("model", "") or "")
+                out.append({"value": pid, "label": f"{pid} · {model}" if model else pid})
+        except Exception:  # noqa: BLE001
+            return []
+        return out
+
     async def _ask(self, system: str, prompt: str) -> str:
         provider = await self._provider(self.cfg.extract_provider_id)
         if provider is None:

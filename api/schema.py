@@ -152,6 +152,54 @@ def validate(schema: dict, payload: dict) -> tuple[dict, dict]:
     return values, errors
 
 
+EMPTY_LABELS = {
+    "extract_provider_id": "不指定（跟当前会话用同一个模型）",
+    "embedding_provider_id": "不指定（不存向量）",
+}
+
+# 枚举型配置项：选项写在这里，前端就当 select 渲染
+STATIC_OPTIONS = {
+    "log_level": [{"value": "DEBUG", "label": "DEBUG"}, {"value": "INFO", "label": "INFO"},
+                  {"value": "WARN", "label": "WARN"}, {"value": "ERROR", "label": "ERROR"}],
+}
+
+CHOICE_KEYS = {
+    "extract_provider_id": "provider_choices",
+    "embedding_provider_id": "embedding_choices",
+}
+
+
+def known_values(plugin, key: str) -> list[str]:
+    """真实存在的提供商 ID 列表（不含「当前值」这种为了显示而塞进去的项）。"""
+    getter = getattr(plugin, CHOICE_KEYS.get(key, ""), None)
+    if not callable(getter):
+        return []
+    try:
+        return [str(item.get("value", "")) for item in (getter() or []) if item.get("value")]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def field_choices(plugin, key: str, value) -> list[dict] | None:
+    """给「提供商 ID」这类字段补上下拉选项；插件拿不到列表时返回 None（退回输入框）。"""
+    getter = getattr(plugin, CHOICE_KEYS.get(key, ""), None)
+    if not callable(getter):
+        return None
+    try:
+        items = getter() or []
+    except Exception:  # noqa: BLE001
+        return None
+    if not items:
+        return None
+    options = [{"value": "", "label": EMPTY_LABELS.get(key, "不指定")}]
+    options.extend(items)
+    current = str(value or "")
+    if current and current not in {item["value"] for item in items}:
+        # 已经存了错值：原样列出来并标红提示，别让下拉静默显示成「不指定」
+        options.insert(1, {"value": current, "label": f"{current}（没有这个提供商）"})
+    return options
+
+
 def describe(plugin, path: str = "") -> dict:
     schema = load_schema(path)
     cfg = plugin.cfg
@@ -167,6 +215,12 @@ def describe(plugin, path: str = "") -> dict:
             "default": meta.get("default"),
             "value": getattr(cfg, key, meta.get("default")),
         }
+        if key in CHOICE_KEYS:
+            options = field_choices(plugin, key, field["value"])
+            if options:
+                field["options"] = options
+        elif key in STATIC_OPTIONS:
+            field["options"] = STATIC_OPTIONS[key]
         groups.setdefault(group_of(key), []).append(field)
     return {
         "groups": [

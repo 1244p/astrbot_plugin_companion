@@ -417,6 +417,18 @@
     var hint = field.hint ? "<small>" + esc(field.hint) + "</small>" : "";
     var unit = UNIT[field.key] ? '<span class="unit">' + UNIT[field.key] + "</span>" : "";
     var control;
+    if (field.options && field.options.length) {
+      control = '<select class="pick" data-key="' + esc(field.key) + '">' +
+        field.options.map(function (option) {
+          return '<option value="' + esc(option.value) + '"' +
+            (String(valueOf(field)) === String(option.value) ? " selected" : "") + ">" +
+            esc(option.label) + "</option>";
+        }).join("") + "</select>";
+      return '<div class="set-field' + (dirty ? " is-dirty" : "") + (bad ? " has-error" : "") +
+        '" data-field="' + esc(field.key) + '">' +
+        '<label class="field-title">' + title + "</label>" + control + hint +
+        (bad ? '<em class="field-error">' + esc(bad) + "</em>" : "") + "</div>";
+    }
     if (field.type === "bool") {
       control = '<label class="switch"><input type="checkbox" data-key="' +
         esc(field.key) + '"' + (valueOf(field) ? " checked" : "") + " /><span></span></label>";

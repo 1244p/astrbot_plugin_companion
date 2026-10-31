@@ -25,6 +25,15 @@ VALUES = {
     "top_k": 6,
 }
 
+SAMPLE_PROVIDERS = {
+    "extract_provider_id": [
+        {"value": "siliconflow-memory-tidy", "label": "siliconflow-memory-tidy · Qwen/Qwen3-30B-A3B-Instruct-2507"},
+    ],
+    "embedding_provider_id": [
+        {"value": "siliconflow-embed", "label": "siliconflow-embed · BAAI/bge-m3"},
+    ],
+}
+
 SCOPE = "qq_official_webhook:FriendMessage:3587BDB1966C264A3A00B33E632BADF5"
 
 FACTS = [
@@ -112,16 +121,19 @@ def settings_payload() -> dict:
     for key, meta in schema.items():
         if key == "baseline":
             continue
-        groups.setdefault(schema_mod.group_of(key), []).append(
-            {
-                "key": key,
-                "title": schema_mod.TITLES.get(key, key),
-                "type": meta.get("type", "string"),
-                "hint": meta.get("hint", ""),
-                "default": meta.get("default"),
-                "value": VALUES.get(key, meta.get("default")),
-            }
-        )
+        field = {
+            "key": key,
+            "title": schema_mod.TITLES.get(key, key),
+            "type": meta.get("type", "string"),
+            "hint": meta.get("hint", ""),
+            "default": meta.get("default"),
+            "value": VALUES.get(key, meta.get("default")),
+        }
+        if key in schema_mod.CHOICE_KEYS:
+            field["options"] = [{"value": "", "label": "不指定"}] + SAMPLE_PROVIDERS.get(key, [])
+        elif key in schema_mod.STATIC_OPTIONS:
+            field["options"] = schema_mod.STATIC_OPTIONS[key]
+        groups.setdefault(schema_mod.group_of(key), []).append(field)
     return {
         "groups": [
             {"id": gid, "title": title, "desc": desc, "fields": groups.get(gid, [])}

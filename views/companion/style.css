@@ -93,7 +93,8 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 /* ---------- 指标带 ---------- */
 .stat-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* 窄屏时 6 个指标不要留一个孤零零占满整行 */
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -549,8 +550,23 @@ html[data-theme="dark"] .meter { background: rgba(232, 234, 237, 0.16); }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 0 4px;
-  background: linear-gradient(transparent, var(--bg) 40%);
+  margin-top: 4px;
+  padding: 10px 12px;
+  /* 实心底 + 上边框：之前用透明渐变的底，滚动截屏/合成时下面的字段会透上来 */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 
 .set-savebar #set-dirty { flex: 1; color: var(--muted); font-size: 12.5px; }
+
+.set-field .pick {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  max-width: 100%;
+}
