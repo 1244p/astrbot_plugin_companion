@@ -83,6 +83,22 @@ data/plugin_data/astrbot_plugin_companion/
 
 删除全部记忆：备份 `memory.db` 后删掉 `memory.db*`，重启 AstrBot。
 
+## 从 memory_evo 搬数据
+
+两套库结构不同（旧 `subject/predicate/object`，新 `slot/content`），不会自动互通。搬一次：
+
+```bash
+# 先在容器外备份旧库
+docker cp astrbot:/AstrBot/data/plugin_data/astrbot_plugin_memory_evo/memory.db ./evo.db
+
+# 干跑：只报告有多少条
+python scripts/migrate_from_evo.py --old ./evo.db   --new /AstrBot/data/plugin_data/astrbot_plugin_companion/memory.db
+
+# 确认数字对得上再加 --apply
+```
+
+脚本只读旧库、按 `(scope, slot, content, status)` 去重，可重复执行。向量不搬——旧模型和新模型的维度不一定相同，搬过来只会是错的余弦值，交给新插件后台回填重算。
+
 ## 开发
 
 ```bash
