@@ -1,5 +1,7 @@
 # 陪伴记忆 · astrbot_plugin_companion
 
+[![release](https://img.shields.io/github/v/release/1244p/astrbot_plugin_companion?color=3c96ca)](https://github.com/1244p/astrbot_plugin_companion/releases) [![tests](https://img.shields.io/badge/tests-101%20passed-3c96ca)](https://github.com/1244p/astrbot_plugin_companion/blob/main/tests) [![license](https://img.shields.io/badge/license-MIT-3c96ca)](https://github.com/1244p/astrbot_plugin_companion/blob/main/LICENSE)
+
 给 AstrBot 的**私聊**加一层长期记忆和一层会缓慢变化的人格。零依赖、全本地、可审计、可撤销。
 
 这是 [astrbot_plugin_memory_evo](https://github.com/1244p/astrbot_plugin_memory_evo) 的重写版：同一套思路重新搭骨架，把上一版长出来的补丁债清掉（`main.py` 从 1230 行拆成接线 + 六个 core 模块，配置读取从 55 处散落的字符串键收成一个入口）。
