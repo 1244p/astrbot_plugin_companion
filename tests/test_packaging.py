@@ -26,6 +26,20 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import build_zip  # noqa: E402
 from api import schema  # noqa: E402
 
+def read(rel: str) -> str:
+    import io as _io
+
+    with _io.open(os.path.join(ROOT, rel), encoding="utf-8") as handle:
+        return handle.read()
+
+
+def pkg_version() -> str:
+    for line in read("metadata.yaml").splitlines():
+        if line.startswith("version:"):
+            return line.split(":", 1)[1].strip().lstrip("v")
+    return ""
+
+
 REQUIRED_FIELDS = ("name", "desc", "version", "author")
 
 
@@ -117,6 +131,21 @@ class ArchiveShapeTest(unittest.TestCase):
                 continue
             self.assertIn(schema.group_of(key), group_ids, f"配置项 {key} 没有落到任何分组")
         self.assertTrue(group_ids, "schema.GROUPS 不能为空")
+
+class ViewBuildTest(unittest.TestCase):
+    """页面要能自己报版本，否则「浏览器里是旧 JS」这类问题无从判断。"""
+
+    def version(self) -> str:
+        return pkg_version()
+
+    def test_html_carries_version_marker(self):
+        html = read("views/companion/index.html")
+        self.assertIn("页面 " + self.version(), html)
+        self.assertIn("app.js?v=" + self.version(), html)
+
+    def test_script_build_matches_metadata(self):
+        js = read("views/companion/app.js")
+        self.assertIn('__companionBuild = "' + self.version() + '"', js)
 
 
 if __name__ == "__main__":

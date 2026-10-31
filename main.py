@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
+import io
 import random
 
 from astrbot.api import AstrBotConfig, logger
@@ -37,7 +39,7 @@ HELP = (
     "/memory persona      看人格五维\n"
     "/memory care on|off|status|now|why\n"
     "/memory logs [n]      看插件自己的日志\n"
-    "/memory settings      （面板里改更方便）"
+    "/memory settings      （面板里改更方便）" + chr(10) +    "/memory providers     看探测到的模型提供商" + chr(10) +    "/memory ui            面板自检：版本/路由/文件"
 )
 
 
@@ -483,6 +485,9 @@ class CompanionPlugin(Star):
             lines += [f"  · {item['label']}" for item in embed] or ["  （没读到）"]
             yield event.plain_result(chr(10).join(lines))
             return
+        if head == "ui":
+            yield event.plain_result(self._ui_report())
+            return
         if head == "logs":
             if tail and tail[0] == "clear":
                 removed = self.journal.clear()
@@ -498,6 +503,41 @@ class CompanionPlugin(Star):
             )
             return
         yield event.plain_result(HELP)
+
+    def _ui_report(self) -> str:
+        """面板文件是哪一版、路由注册了几条，直接打出来。
+
+        面板空白时最折磨人的是分不清「插件里的文件旧」和「浏览器跑的是旧 JS」，
+        这条命令读运行中插件自己的目录，不受浏览器缓存影响。
+        """
+        views = os.path.join(os.path.dirname(__file__), "views", "companion")
+        rows = ["面板自检", "插件版本：" + self._version(), "视图目录：" + views]
+        try:
+            html = io.open(os.path.join(views, "index.html"), encoding="utf-8").read()
+            found = re.search(r"页面 ([0-9][^<]*)", html)
+            rows.append("index.html 版本标记：" + (found.group(1) if found else "（没有）"))
+            rows.append("index.html 脚本串：" + ("有 ?v= 版本" if "?v=" in html else "没有 ?v= 版本"))
+        except OSError as exc:
+            rows.append("index.html 读取失败：" + str(exc))
+        try:
+            js = io.open(os.path.join(views, "app.js"), encoding="utf-8").read()
+            found = re.search(r'__companionBuild = "([^"]+)"', js)
+            rows.append("app.js 构建号：" + (found.group(1) if found else "（没有）"))
+            rows.append("app.js 含 select 渲染：" + ("有" if "select" in js else "无"))
+            rows.append("app.js 含 set-diag： " + ("有" if "set-diag" in js else "无"))
+        except OSError as exc:
+            rows.append("app.js 读取失败：" + str(exc))
+        try:
+            apis = getattr(self.context, "registered_web_apis", None)
+            apis = list(apis or [])
+            mine = [a for a in apis if str(getattr(a, "route", "")).startswith("/" + PLUGIN_NAME)]
+            rows.append("已注册面板路由：" + str(len(mine)) + " 条")
+        except Exception:  # noqa: BLE001
+            rows.append("已注册面板路由：读不到")
+        chat = self.provider_choices()
+        embed = self.embedding_choices()
+        rows.append("提供商探测：聊天 " + str(len(chat)) + " 个、嵌入 " + str(len(embed)) + " 个")
+        return chr(10).join(rows)
 
     @filter.llm_tool(name="memory_search")
     async def tool_search(self, event: AstrMessageEvent, query: str = "") -> str:

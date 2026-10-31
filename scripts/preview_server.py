@@ -135,6 +135,7 @@ def settings_payload() -> dict:
             field["options"] = schema_mod.STATIC_OPTIONS[key]
         groups.setdefault(schema_mod.group_of(key), []).append(field)
     return {
+        "diagnostics": {"version": "0.1.8", "providers": 14, "embeddings": 1},
         "groups": [
             {"id": gid, "title": title, "desc": desc, "fields": groups.get(gid, [])}
             for gid, title, desc in schema_mod.GROUPS
