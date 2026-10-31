@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>陪伴记忆</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="hero">
+  <div class="hero-main">
+    <h1>陪伴记忆</h1>
+    <p class="sub" id="hero-sub">正在读取…</p>
+  </div>
+  <div class="hero-tools">
+    <label class="scope-pick">
+      <span class="dot"></span>
+      <select id="scope"></select>
+    </label>
+    <button class="icon-btn" id="reload" title="刷新">↻</button>
+  </div>
+</header>
+
+<section class="stat-strip" id="stats"></section>
+
+<nav class="segmented" id="tabs">
+  <button class="tab on" data-tab="facts">记忆</button>
+  <button class="tab" data-tab="persona">人格</button>
+  <button class="tab" data-tab="care">主动消息</button>
+  <button class="tab" data-tab="logs">日志</button>
+</nav>
+
+<main>
+  <section class="panel" id="panel-facts">
+    <div class="toolbar">
+      <input class="search" id="q" placeholder="搜内容或槽位" />
+      <select id="status">
+        <option value="">全部状态</option>
+        <option value="active">生效中</option>
+        <option value="suspect">待确认</option>
+        <option value="superseded">已被取代</option>
+      </select>
+      <button class="btn ghost" id="refresh-facts">查询</button>
+    </div>
+    <div class="chips" id="kind-chips"></div>
+    <div class="bulkbar" id="bulkbar" hidden>
+      <span id="bulk-count">已选 0 条</span>
+      <button class="btn sm ghost" id="bulk-confirm">确认</button>
+      <button class="btn sm danger" id="bulk-delete">删除</button>
+      <button class="btn sm quiet" id="bulk-clear">取消</button>
+    </div>
+    <ul class="fact-list" id="facts"></ul>
+    <p class="empty" id="facts-empty" hidden>这个会话还没有记忆。<br />多聊几轮，或检查设置页的「攒够几轮就抽取」。</p>
+  </section>
+
+  <section class="panel" id="panel-persona" hidden>
+    <div class="panel-head">
+      <h2>当前人格</h2>
+      <p class="hint" id="persona-summary"></p>
+    </div>
+    <div class="traits" id="traits"></div>
+    <h3 class="section-title">演化记录</h3>
+    <ol class="timeline" id="persona-log"></ol>
+  </section>
+
+  <section class="panel" id="panel-care" hidden>
+    <div class="care-hero" id="care-hero">
+      <div class="care-state">
+        <span class="pill" id="care-pill">—</span>
+        <strong id="care-reason">—</strong>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="care-toggle" />
+        <span></span>
+      </label>
+    </div>
+    <div class="care-grid" id="care-grid"></div>
+    <blockquote class="last-said" id="care-last"></blockquote>
+  </section>
+
+  <section class="panel" id="panel-logs" hidden>
+    <div class="toolbar">
+      <input class="search" id="log-q" placeholder="搜消息、事件、数值" />
+      <div class="chips" id="log-levels"></div>
+      <button class="btn ghost sm" id="log-clear">清空</button>
+    </div>
+    <div class="log-stats" id="log-stats"></div>
+    <ul class="log-list" id="log-list"></ul>
+    <p class="empty" id="log-empty" hidden>没有日志。INFO 以下级别不落盘。</p>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

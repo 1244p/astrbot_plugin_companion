@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.preview/
+*.db
+*.db-wal
+*.db-shm
+logs/

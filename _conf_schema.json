@@ -1,0 +1,242 @@
+{
+  "enabled": {
+    "type": "bool",
+    "default": true,
+    "description": "总开关",
+    "hint": "关掉后不注入、不抽取"
+  },
+  "db_path": {
+    "type": "string",
+    "default": "",
+    "description": "记忆库路径",
+    "hint": "留空用 plugin_data/astrbot_plugin_companion/memory.db"
+  },
+  "top_k": {
+    "type": "int",
+    "default": 6,
+    "description": "召回条数",
+    "hint": "每次最多注入几条"
+  },
+  "max_inject_chars": {
+    "type": "int",
+    "default": 600,
+    "description": "注入总字数",
+    "hint": "记忆块的字数上限"
+  },
+  "max_buffer": {
+    "type": "int",
+    "default": 40,
+    "description": "缓冲上限",
+    "hint": "攒够这么多轮强制抽取"
+  },
+  "flush_turns": {
+    "type": "int",
+    "default": 6,
+    "description": "攒够几轮就抽取",
+    "hint": "调到 1 会非常频繁，成本上升"
+  },
+  "idle_seconds": {
+    "type": "int",
+    "default": 90,
+    "description": "空闲几秒就抽取",
+    "hint": "安静这么久就把缓冲落盘"
+  },
+  "min_confidence": {
+    "type": "float",
+    "default": 0.45,
+    "description": "最低置信度",
+    "hint": "低于它的条目不注入（重要度 5 例外）"
+  },
+  "max_per_slot": {
+    "type": "int",
+    "default": 2,
+    "description": "同槽位上限",
+    "hint": "避免同一类信息刷屏"
+  },
+  "max_item_chars": {
+    "type": "int",
+    "default": 80,
+    "description": "单条展示字数",
+    "hint": "超过就截断"
+  },
+  "include_suspect": {
+    "type": "bool",
+    "default": false,
+    "description": "注入待确认条目",
+    "hint": "开了会把冲突内容也喂给模型"
+  },
+  "persona_inject": {
+    "type": "bool",
+    "default": true,
+    "description": "注入人格倾向",
+    "hint": "把当前说话倾向写进上下文"
+  },
+  "persona_evolve": {
+    "type": "bool",
+    "default": true,
+    "description": "允许人格演化",
+    "hint": "关掉后人格停在当前值"
+  },
+  "persona_max_chars": {
+    "type": "int",
+    "default": 160,
+    "description": "人格注入字数",
+    "hint": ""
+  },
+  "max_step": {
+    "type": "float",
+    "default": 0.03,
+    "description": "单次人格位移上限",
+    "hint": "实际步长还会按距上次演化多久配速"
+  },
+  "persona_daily_budget": {
+    "type": "float",
+    "default": 0.15,
+    "description": "每日位移预算",
+    "hint": "五维一天累计上限，用完只回归不前进"
+  },
+  "persona_half_life_days": {
+    "type": "float",
+    "default": 7.0,
+    "description": "回基线半衰期（天）",
+    "hint": "偏离多少、多久走完一半"
+  },
+  "semantic_recall": {
+    "type": "bool",
+    "default": true,
+    "description": "启用向量召回",
+    "hint": "没配嵌入模型时自动退回字面相似度"
+  },
+  "embedding_provider_id": {
+    "type": "string",
+    "default": "",
+    "description": "嵌入提供商 ID",
+    "hint": "在「嵌入」里建的那个"
+  },
+  "embedding_timeout": {
+    "type": "int",
+    "default": 10,
+    "description": "嵌入超时秒",
+    "hint": ""
+  },
+  "care_enable": {
+    "type": "bool",
+    "default": false,
+    "description": "主动消息总开关",
+    "hint": "打开后安静久了会自己说话"
+  },
+  "care_min_idle_minutes": {
+    "type": "int",
+    "default": 90,
+    "description": "空闲多少分钟才发",
+    "hint": ""
+  },
+  "care_daily_max": {
+    "type": "int",
+    "default": 3,
+    "description": "每天最多几条",
+    "hint": ""
+  },
+  "care_max_unanswered": {
+    "type": "int",
+    "default": 2,
+    "description": "连发几条没回就停",
+    "hint": "发出去没人理就闭嘴"
+  },
+  "care_quiet_start": {
+    "type": "string",
+    "default": "23:30",
+    "description": "免打扰开始",
+    "hint": "HH:MM"
+  },
+  "care_quiet_end": {
+    "type": "string",
+    "default": "08:00",
+    "description": "免打扰结束",
+    "hint": "HH:MM，支持跨零点"
+  },
+  "care_schedule": {
+    "type": "string",
+    "default": "",
+    "description": "允许时段",
+    "hint": "如 09:00-12:00,19:00-23:00，留空不限"
+  },
+  "care_probability": {
+    "type": "float",
+    "default": 0.85,
+    "description": "每轮发的概率",
+    "hint": "抽不中就等下一轮"
+  },
+  "care_max_chars": {
+    "type": "int",
+    "default": 45,
+    "description": "单条字数上限",
+    "hint": ""
+  },
+  "care_timezone": {
+    "type": "string",
+    "default": "Asia/Shanghai",
+    "description": "时区",
+    "hint": "免打扰和时段按它算"
+  },
+  "care_split": {
+    "type": "bool",
+    "default": true,
+    "description": "拆成多条发",
+    "hint": "按句末标点或空行拆"
+  },
+  "care_split_max": {
+    "type": "int",
+    "default": 2,
+    "description": "最多拆几条",
+    "hint": ""
+  },
+  "care_split_delay": {
+    "type": "float",
+    "default": 1.2,
+    "description": "两条之间间隔秒",
+    "hint": ""
+  },
+  "extract_provider_id": {
+    "type": "string",
+    "default": "",
+    "description": "抽取模型 ID",
+    "hint": "留空用当前会话模型"
+  },
+  "llm_timeout": {
+    "type": "int",
+    "default": 45,
+    "description": "模型超时秒",
+    "hint": ""
+  },
+  "log_level": {
+    "type": "string",
+    "default": "INFO",
+    "description": "日志级别",
+    "hint": "DEBUG/INFO/WARN/ERROR"
+  },
+  "log_days": {
+    "type": "int",
+    "default": 7,
+    "description": "日志保留天数",
+    "hint": ""
+  },
+  "log_mirror": {
+    "type": "bool",
+    "default": true,
+    "description": "同步到框架日志",
+    "hint": "WARN 以上也打进 AstrBot 日志"
+  },
+  "baseline": {
+    "type": "dict",
+    "default": {
+      "intimacy": 0.5,
+      "playfulness": 0.5,
+      "directness": 0.5,
+      "initiative": 0.5,
+      "warmth": 0.5
+    },
+    "description": "人格基线",
+    "hint": "演化会朝这里回"
+  }
+}
