@@ -68,11 +68,44 @@ class Routes:
         count = 0
         for path, (handler, methods) in table.items():
             try:
-                register(f"{self.prefix}/{path}", handler, methods, f"companion {path}")
+                register(
+                    f"{self.prefix}/{path}",
+                    self._guard(path, handler),
+                    methods,
+                    f"companion {path}",
+                )
                 count += 1
             except Exception as error:  # noqa: BLE001
                 self.plugin.journal.write("WARN", "api.fail", f"路由 {path} 注册失败：{error}")
         return count
+
+    def _guard(self, name, handler):
+        """handler 抛异常时不要返回 500。
+
+        500 会被面板 bridge 当成请求失败，前端拿不到任何文案，页面就停在
+        「正在读取…」。这里转成 200 + {status:error}，前端能把原因显示出来，
+        同时写一条 api.fail 到插件日志。
+        """
+
+        async def wrapped(**kwargs):
+            try:
+                return await handler(**kwargs)
+            except Exception as error:  # noqa: BLE001
+                try:
+                    self.plugin.journal.write(
+                        "ERROR", "api.fail", f"{name}：{error}",
+                        scope=str(kwargs.get("scope", "")),
+                        error=type(error).__name__,
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                return {
+                    "status": "error",
+                    "message": f"{name} 出错：{error}",
+                    "data": {},
+                }
+
+        return wrapped
 
     # ---------- 工具 ----------
 

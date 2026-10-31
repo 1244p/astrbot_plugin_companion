@@ -31,19 +31,37 @@
     });
   }
 
+  // 后端 handler 出错时会回 {status:"error", message}（不是 500，500 会让 bridge
+  // reject 成一个没有文案的错误，页面就永远停在「正在读取…」）。这里统一把它
+  // 抛成 Error，好让调用处能把原因写进 hero。
+  function unwrap(data) {
+    if (data && data.status === "error") {
+      throw new Error(data.message || "接口返回错误");
+    }
+    return data;
+  }
+
   function api(path, params) {
-    if (bridge && bridge.apiGet) return bridge.apiGet(API + path, params || {});
-    var query = new URLSearchParams(params || {}).toString();
-    return fetch(API + path + (query ? "?" + query : "")).then(function (r) { return r.json(); });
+    var call = bridge && bridge.apiGet
+      ? bridge.apiGet(API + path, params || {})
+      : (function () {
+          var query = new URLSearchParams(params || {}).toString();
+          return fetch(API + path + (query ? "?" + query : "")).then(function (r) {
+            return r.json();
+          });
+        })();
+    return call.then(unwrap);
   }
 
   function post(path, body) {
-    if (bridge && bridge.apiPost) return bridge.apiPost(API + path, body || {});
-    return fetch(API + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
-    }).then(function (r) { return r.json(); });
+    var call = bridge && bridge.apiPost
+      ? bridge.apiPost(API + path, body || {})
+      : fetch(API + path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        }).then(function (r) { return r.json(); });
+    return call.then(unwrap);
   }
 
   function toast(text) {
@@ -431,13 +449,26 @@
     bind();
     renderLogLevels();
     syncTabs();
+    // 宿主的 ready() 要等父窗口发来 context 消息才 resolve。如果那条消息比本脚本的
+    // 监听器更早到（页面被缓存、iframe 复用都会这样），它就永远等不到——页面于是
+    // 一直停在「正在读取…」。所以最多等 800ms，超时就用默认值继续拉数据。
     var ready = bridge && bridge.ready ? bridge.ready() : Promise.resolve({});
-    ready.then(function (info) {
+    var timeout = new Promise(function (resolve) {
+      setTimeout(function () { resolve({}); }, 800);
+    });
+    if (bridge && bridge.onContext) {
+      bridge.onContext(function (info) {
+        if (info && info.isDark) document.documentElement.dataset.theme = "dark";
+      });
+    }
+    Promise.race([ready, timeout]).then(function (info) {
       if (info && info.isDark) document.documentElement.dataset.theme = "dark";
-      if (info && info.pluginName) API = "";
       return loadScopes();
     }).then(function () {
       return refreshAll();
+    }).catch(function (error) {
+      $("hero-sub").textContent = "面板出错：" + ((error && error.message) || error);
+      toast("面板出错：" + ((error && error.message) || error));
     });
   }
 
