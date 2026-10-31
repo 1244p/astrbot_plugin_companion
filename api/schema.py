@@ -42,6 +42,15 @@ PREFIX = {
 }
 
 TITLES = {
+    "enabled": "总开关",
+    "db_path": "记忆库路径",
+    "max_buffer": "待抽取缓冲上限",
+    "include_suspect": "注入待确认条目",
+    "embedding_timeout": "嵌入超时（秒）",
+    "llm_timeout": "抽取超时（秒）",
+    "log_level": "日志级别",
+    "log_days": "日志保留天数",
+    "log_mirror": "同步到框架日志",
     "care_enable": "主动消息总开关",
     "care_min_idle_minutes": "空闲多少分钟才发",
     "care_daily_max": "每天最多几条",
@@ -94,6 +103,53 @@ def group_of(key: str) -> str:
         return PREFIX[key]
     head = key.split("_", 1)[0]
     return head if head in {g[0] for g in GROUPS} else "basic"
+
+
+# 改了这些要重启插件才生效（换库存路径等于换一个库）
+RESTART_FIELDS = {"db_path"}
+
+TYPE_NAMES = {"int": "整数", "float": "小数", "bool": "开或关", "string": "文本"}
+
+
+def _coerce(kind: str, raw):
+    """把表单来的值转成 schema 声明的类型；转不动就抛 ValueError。"""
+    if kind == "bool":
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, (int, float)):
+            return bool(raw)
+        text = str(raw).strip().lower()
+        if text in ("1", "true", "on", "yes"):
+            return True
+        if text in ("0", "false", "off", "no", ""):
+            return False
+        raise ValueError("不是开关值")
+    if kind == "int":
+        if isinstance(raw, bool):
+            raise ValueError("不是整数")
+        return int(str(raw).strip()) if isinstance(raw, str) else int(raw)
+    if kind == "float":
+        if isinstance(raw, bool):
+            raise ValueError("不是小数")
+        return float(str(raw).strip()) if isinstance(raw, str) else float(raw)
+    if raw is None:
+        return ""
+    return str(raw)
+
+
+def validate(schema: dict, payload: dict) -> tuple[dict, dict]:
+    """只校验表单里带来的键；返回 (要写的值, 每个字段的错误)。"""
+    values: dict = {}
+    errors: dict = {}
+    for key, meta in schema.items():
+        if key == "baseline" or key not in payload:
+            continue
+        kind = meta.get("type", "string")
+        try:
+            values[key] = _coerce(kind, payload[key])
+        except (TypeError, ValueError):
+            errors[key] = f"需要{TYPE_NAMES.get(kind, '有效值')}"
+    return values, errors
 
 
 def describe(plugin, path: str = "") -> dict:

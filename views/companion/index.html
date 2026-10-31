@@ -28,6 +28,7 @@
   <button class="tab" data-tab="persona">人格</button>
   <button class="tab" data-tab="care">主动消息</button>
   <button class="tab" data-tab="logs">日志</button>
+  <button class="tab" data-tab="settings">设置</button>
 </nav>
 
 <main>
@@ -87,6 +88,19 @@
     <div class="log-stats" id="log-stats"></div>
     <ul class="log-list" id="log-list"></ul>
     <p class="empty" id="log-empty" hidden>没有日志。INFO 以下级别不落盘。</p>
+  </section>
+  <section class="panel" id="panel-settings" hidden>
+    <div class="set-top">
+      <input class="search" id="set-q" placeholder="搜设置项，例如 空闲、召回、日志" />
+      <p class="hint">改完点保存；带「需重启」的项要重载插件才生效。</p>
+    </div>
+    <nav class="set-nav" id="set-nav"></nav>
+    <div class="set-groups" id="set-groups"></div>
+    <div class="set-savebar">
+      <span id="set-dirty">没有改动</span>
+      <button class="btn ghost sm" id="set-undo" disabled>撤销</button>
+      <button class="btn sm" id="set-save" disabled>保存</button>
+    </div>
   </section>
 </main>
 

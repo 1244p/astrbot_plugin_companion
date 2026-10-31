@@ -450,3 +450,107 @@ html[data-theme="dark"] .meter { background: rgba(232, 234, 237, 0.16); }
   .fact-side .row-actions { opacity: 1; }
   .log-fields { display: none; }
 }
+
+/* ---------- 设置页 ---------- */
+
+.set-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.set-top .search { flex: 1 1 260px; }
+.set-top .hint { margin: 0; }
+
+.set-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.set-nav-item {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-decoration: none;
+  background: var(--surface);
+}
+
+.set-nav-item:hover { color: var(--primary); border-color: var(--primary); }
+
+.set-group {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.set-group-head h3 { margin: 0 0 2px; font-size: 14px; }
+.set-group-head .hint { margin: 0 0 12px; }
+
+.set-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px 18px;
+}
+
+.set-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.set-field:hover { border-color: var(--line); }
+.set-field.is-dirty { border-left: 3px solid var(--warn, #d8a13a); }
+.set-field.has-error { border-color: var(--danger, #d9534f); }
+
+.set-field .field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.set-field .field-title { font-size: 13px; font-weight: 600; }
+.set-field small { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.set-field .field-error { color: var(--danger, #d9534f); font-size: 12px; font-style: normal; }
+.set-field mark { background: rgba(60, 150, 202, 0.28); color: inherit; border-radius: 3px; }
+
+.set-field .num,
+.set-field .text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.set-field .num { max-width: 160px; }
+.set-field .unit { color: var(--muted); font-size: 12px; }
+
+.set-savebar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 4px;
+  background: linear-gradient(transparent, var(--bg) 40%);
+}
+
+.set-savebar #set-dirty { flex: 1; color: var(--muted); font-size: 12.5px; }

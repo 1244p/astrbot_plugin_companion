@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import json
+
 from ..core import care
+from ..core.config import Config
 
 try:
     from astrbot.api.web import json_response, request
@@ -61,7 +64,7 @@ class Routes:
             "facts/confirm": (self.confirm, ["POST"]),
             "persona": (self.persona, ["GET"]),
             "care": (self.care, ["GET", "POST"]),
-            "settings": (self.settings, ["GET"]),
+            "settings": (self.settings, ["GET", "POST"]),
             "logs": (self.logs, ["GET"]),
             "logs/clear": (self.logs_clear, ["POST"]),
         }
@@ -263,7 +266,80 @@ class Routes:
     async def settings(self):
         from . import schema
 
+        if request is not None and getattr(request, "method", "GET").upper() == "POST":
+            body = await self._body()
+            return _ok(self._save_settings(schema, body))
         return _ok(schema.describe(self.plugin))
+
+    def _save_settings(self, schema, body: dict) -> dict:
+        """把表单值写进插件配置。
+
+        校验失败不写盘，也不返回 4xx：面板 bridge 对非 2xx 只会抛一个没有文案的
+        错误，字段级报错就丢了。这里统一 200 + ok:false + errors。
+        """
+        current = schema.describe(self.plugin)
+        values, errors = schema.validate(schema.load_schema(), body)
+        if errors:
+            return {"ok": False, "errors": errors, "settings": current, "changed": []}
+
+        raw = self.plugin.raw_config
+        changed = [
+            key for key, value in values.items()
+            if getattr(self.plugin.cfg, key, None) != value
+        ]
+        if not changed:
+            return {"ok": True, "errors": {}, "settings": current, "changed": []}
+
+        for key, value in values.items():
+            try:
+                raw[key] = value
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Config.load 会做范围钳制，用回读的值覆盖用户填的越界值（比如 top_k=99 存成 20）
+        fresh = Config.load(dict(raw))
+        for key in values:
+            raw[key] = getattr(fresh, key, values[key])
+
+        try:
+            if hasattr(raw, "save_config"):
+                raw.save_config()
+            else:
+                self._write_config_file(dict(raw))
+        except Exception as error:  # noqa: BLE001
+            self.plugin.journal.write("ERROR", "settings.fail", f"保存失败：{error}")
+            return {
+                "ok": False,
+                "errors": {"_": f"写配置失败：{error}"},
+                "settings": current,
+                "changed": [],
+            }
+
+        self.plugin.cfg = fresh
+        self.plugin.service.cfg = fresh
+        restart = [key for key in changed if key in schema.RESTART_FIELDS]
+        self.plugin.journal.write(
+            "INFO", "settings.save", "面板保存了设置",
+            changed=",".join(sorted(changed)), restart=",".join(restart),
+        )
+        return {
+            "ok": True,
+            "errors": {},
+            "settings": schema.describe(self.plugin),
+            "changed": sorted(changed),
+            "restart": restart,
+        }
+
+    @staticmethod
+    def _write_config_file(data: dict) -> None:
+        import os
+
+        root = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        )
+        path = os.path.join(root, "config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
 
     async def logs(self):
         journal = self.plugin.journal

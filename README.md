@@ -41,12 +41,14 @@ git clone https://github.com/1244p/astrbot_plugin_companion
 
 ## 面板
 
-插件详情页 → 打开视图，四个页签：
+插件详情页 → 打开视图，五个页签：
 
 - **记忆**：按条列出，可搜、按状态/类型筛、行内确认或删除、批量操作、导出。
 - **人格**：五维卡（带基线刻度）+ 演化时间线（每次位移与依据）。
 - **主动消息**：状态卡（可以发 / 暂不发）+ 闸门逐条 + 上次说了什么。
 - **日志**：按级别/关键词筛，含统计与清空。
+- **设置**：按 `_conf_schema.json` 自动生成（分组、搜索、改动高亮、字段级报错、粘性保存条）。
+  保存只写改动过的键；越界值按钳制结果回显；改 `db_path` 会提示重载插件。
 
 ## 关键机制
 
@@ -106,7 +108,7 @@ python -m unittest discover -s tests      # 81 条，纯 stdlib，不需要装 A
 python scripts/preview_server.py --port 8140   # 不装 AstrBot 也能看面板
 ```
 
-本地预览打开 `http://127.0.0.1:8140/index.html?tab=persona&dark=1`，四个页签和两套主题都能切；
+本地预览打开 `http://127.0.0.1:8140/index.html?tab=persona&dark=1`，五个页签和两套主题都能切；
 样例数据与线上接口同形状，改样式不用反复重启容器。
 
 `core/` 不 import astrbot——调模型、算向量、发消息都是注入的回调，所以业务逻辑可以裸跑测试。

@@ -35,6 +35,31 @@
     pendingDelete: null,
     kind: "",
     logLevel: "",
+    settings: null,
+    draft: {},
+    fieldErrors: {},
+  };
+
+  // 数值项的单位，让「90」不至于被当成 90 秒
+  var UNIT = {
+    top_k: "条",
+    flush_turns: "轮",
+    idle_seconds: "秒",
+    max_buffer: "条",
+    max_inject_chars: "字",
+    max_item_chars: "字",
+    max_per_slot: "条",
+    llm_timeout: "秒",
+    embedding_timeout: "秒",
+    persona_max_chars: "字",
+    care_min_idle_minutes: "分钟",
+    care_daily_max: "条/天",
+    care_max_unanswered: "条",
+    care_max_chars: "字",
+    care_split_max: "条",
+    care_split_delay: "秒",
+    log_days: "天",
+    persona_half_life_days: "天",
   };
 
   var TRAITS = {
@@ -359,6 +384,142 @@
     }).join("");
   }
 
+
+  // ---------- 设置 ----------
+
+  function loadSettings() {
+    return api("settings").then(function (data) {
+      state.settings = data || { groups: [] };
+      state.draft = {};
+      state.fieldErrors = {};
+      renderSettings();
+    });
+  }
+
+  function valueOf(field) {
+    if (Object.prototype.hasOwnProperty.call(state.draft, field.key)) {
+      return state.draft[field.key];
+    }
+    return field.value;
+  }
+
+  function isDirty(field) {
+    var now = valueOf(field);
+    if (typeof field.value === "boolean") return now !== field.value;
+    if (typeof field.value === "number") return Number(now) !== field.value;
+    return String(now == null ? "" : now) !== String(field.value == null ? "" : field.value);
+  }
+
+  function fieldHtml(field, needle) {
+    var dirty = isDirty(field);
+    var bad = state.fieldErrors[field.key];
+    var title = needle ? markMatch(field.title, needle) : esc(field.title);
+    var hint = field.hint ? "<small>" + esc(field.hint) + "</small>" : "";
+    var unit = UNIT[field.key] ? '<span class="unit">' + UNIT[field.key] + "</span>" : "";
+    var control;
+    if (field.type === "bool") {
+      control = '<label class="switch"><input type="checkbox" data-key="' +
+        esc(field.key) + '"' + (valueOf(field) ? " checked" : "") + " /><span></span></label>";
+      return '<div class="set-field' + (dirty ? " is-dirty" : "") + (bad ? " has-error" : "") +
+        '" data-field="' + esc(field.key) + '">' +
+        '<div class="field-head"><span class="field-title">' + title + "</span>" +
+        control + "</div>" + hint +
+        (bad ? '<em class="field-error">' + esc(bad) + "</em>" : "") + "</div>";
+    }
+    if (field.type === "int" || field.type === "float") {
+      control = '<input class="num" type="number" data-key="' + esc(field.key) + '" value="' +
+        esc(valueOf(field)) + '"' + (field.type === "float" ? ' step="0.01"' : "") + " />" + unit;
+    } else {
+      control = '<input class="text" type="text" data-key="' + esc(field.key) + '" value="' +
+        esc(valueOf(field)) + '" />';
+    }
+    return '<div class="set-field' + (dirty ? " is-dirty" : "") + (bad ? " has-error" : "") +
+      '" data-field="' + esc(field.key) + '">' +
+      '<label class="field-title">' + title + "</label>" + control + hint +
+      (bad ? '<em class="field-error">' + esc(bad) + "</em>" : "") + "</div>";
+  }
+
+  function markMatch(text, needle) {
+    var source = String(text == null ? "" : text);
+    if (!needle) return esc(source);
+    var at = source.toLowerCase().indexOf(String(needle).toLowerCase());
+    if (at < 0) return esc(source);
+    return esc(source.slice(0, at)) + "<mark>" +
+      esc(source.slice(at, at + String(needle).length)) + "</mark>" +
+      esc(source.slice(at + String(needle).length));
+  }
+
+  function renderSettings() {
+    var data = state.settings || { groups: [] };
+    var needle = ($("set-q").value || "").trim();
+    var touched = Object.keys(state.draft).length;
+
+    $("set-nav").innerHTML = data.groups.map(function (group) {
+      return '<a class="set-nav-item" href="#group-' + esc(group.id) + '">' +
+        esc(group.title) + "</a>";
+    }).join("");
+
+    var html = data.groups.map(function (group) {
+      var fields = group.fields.filter(function (field) {
+        if (!needle) return true;
+        return (field.key + " " + field.title + " " + (field.hint || ""))
+          .toLowerCase().indexOf(needle.toLowerCase()) >= 0;
+      });
+      if (!fields.length) return "";
+      return '<section class="set-group" id="group-' + esc(group.id) + '">' +
+        '<div class="set-group-head"><h3>' + esc(group.title) + "</h3>" +
+        '<p class="hint">' + esc(group.desc || "") + "</p></div>" +
+        '<div class="set-fields">' +
+        fields.map(function (field) {
+          return fieldHtml(field, needle) + "";
+        }).join("") +
+        "</div></section>";
+    }).join("");
+
+    $("set-groups").innerHTML = html || '<p class="empty">没有匹配的设置项。</p>';
+    $("set-dirty").textContent = touched ? "已改 " + touched + " 项，待保存" : "没有改动";
+    $("set-save").disabled = !touched;
+    $("set-undo").disabled = !touched;
+  }
+
+  function onSettingsInput(event) {
+    var key = event.target.dataset && event.target.dataset.key;
+    if (!key) return;
+    var raw = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+    state.draft[key] = raw;
+    delete state.fieldErrors[key];
+    renderSettings();
+  }
+
+  function undoSettings() {
+    state.draft = {};
+    state.fieldErrors = {};
+    renderSettings();
+  }
+
+  function saveSettings() {
+    var body = {};
+    Object.keys(state.draft).forEach(function (key) { body[key] = state.draft[key]; });
+    if (!Object.keys(body).length) return Promise.resolve();
+    return post("settings", body).then(function (data) {
+      if (data && data.ok === false) {
+        state.fieldErrors = (data && data.errors) || {};
+        if (state.fieldErrors._) toast(state.fieldErrors._);
+        renderSettings();
+        return;
+      }
+      state.draft = {};
+      state.fieldErrors = {};
+      state.settings = (data && data.settings) || state.settings;
+      renderSettings();
+      var changed = (data && data.changed) || [];
+      toast("已保存 " + changed.length + " 项");
+      if (data && data.restart && data.restart.length) {
+        toast("这些项要重启插件才生效：" + data.restart.join("、"));
+      }
+    });
+  }
+
   // ---------- 汇总 ----------
 
   function refreshAll() {
@@ -368,6 +529,7 @@
     if (state.tab === "persona") jobs.push(loadPersona());
     if (state.tab === "care") jobs.push(loadCare());
     if (state.tab === "logs") jobs.push(loadLogs());
+    if (state.tab === "settings") jobs.push(loadSettings());
     return Promise.all(jobs).catch(function (error) {
       toast("加载失败：" + error);
     });
@@ -393,6 +555,11 @@
       if (tab) switchTab(tab);
     });
     $("refresh-facts").addEventListener("click", loadFacts);
+    $("set-q").addEventListener("input", renderSettings);
+    $("set-groups").addEventListener("input", onSettingsInput);
+    $("set-groups").addEventListener("change", onSettingsInput);
+    $("set-save").addEventListener("click", saveSettings);
+    $("set-undo").addEventListener("click", undoSettings);
     $("q").addEventListener("keydown", function (event) {
       if (event.key === "Enter") loadFacts();
     });
@@ -457,14 +624,16 @@
     // 面板 iframe 的地址不带 query，所以线上永远是 facts；这条只给本地预览用。
     var match = /[?&]tab=([a-z]+)/.exec(window.location.search);
     var name = match ? match[1] : "facts";
-    return ["facts", "persona", "care", "logs"].indexOf(name) >= 0 ? name : "facts";
+    return ["facts", "persona", "care", "logs", "settings"].indexOf(name) >= 0
+      ? name
+      : "facts";
   }
 
   function syncTabs() {
     document.querySelectorAll(".tab").forEach(function (button) {
       button.classList.toggle("on", button.dataset.tab === state.tab);
     });
-    ["facts", "persona", "care", "logs"].forEach(function (name) {
+    ["facts", "persona", "care", "logs", "settings"].forEach(function (name) {
       $("panel-" + name).hidden = name !== state.tab;
     });
   }

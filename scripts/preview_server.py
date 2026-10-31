@@ -17,6 +17,14 @@ from urllib.parse import urlparse
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIEW_DIR = os.path.join(ROOT, "views", "companion")
 
+# 面板上要显示「改过的值」才看得出草稿效果，挑几项换掉默认值
+VALUES = {
+    "care_min_idle_minutes": 60,
+    "care_schedule": "09:00-12:00, 19:00-23:00",
+    "persona_daily_budget": 0.15,
+    "top_k": 6,
+}
+
 SCOPE = "qq_official_webhook:FriendMessage:3587BDB1966C264A3A00B33E632BADF5"
 
 FACTS = [
@@ -92,6 +100,37 @@ LOGS = [
 ]
 
 
+def settings_payload() -> dict:
+    """直接用真实 schema + 默认值造一份 describe 结果，别手写一份假的。"""
+    import sys
+
+    sys.path.insert(0, os.path.dirname(ROOT))
+    from astrbot_plugin_companion.api import schema as schema_mod
+
+    schema = schema_mod.load_schema(os.path.join(ROOT, "_conf_schema.json"))
+    groups: dict[str, list] = {}
+    for key, meta in schema.items():
+        if key == "baseline":
+            continue
+        groups.setdefault(schema_mod.group_of(key), []).append(
+            {
+                "key": key,
+                "title": schema_mod.TITLES.get(key, key),
+                "type": meta.get("type", "string"),
+                "hint": meta.get("hint", ""),
+                "default": meta.get("default"),
+                "value": VALUES.get(key, meta.get("default")),
+            }
+        )
+    return {
+        "groups": [
+            {"id": gid, "title": title, "desc": desc, "fields": groups.get(gid, [])}
+            for gid, title, desc in schema_mod.GROUPS
+            if groups.get(gid)
+        ]
+    }
+
+
 def payload(kind: str, body: dict) -> dict:
     if kind == "scopes":
         return {"items": [{"scope": SCOPE, "label": "私聊 · 3587BDB1966C", "total": 4,
@@ -113,6 +152,8 @@ def payload(kind: str, body: dict) -> dict:
         if body.get("enabled") is not None:
             CARE["enabled"] = bool(body["enabled"])
         return CARE
+    if kind == "settings":
+        return settings_payload()
     if kind == "logs":
         return {"items": LOGS, "stats": {"total": 7, "counts": {"INFO": 5, "WARN": 1, "ERROR": 1},
                                          "bytes": 4211, "days": 7}}
@@ -177,6 +218,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "persona": payload("persona", {}),
                 "care": payload("care", {}),
                 "logs": payload("logs", {}),
+                "settings": payload("settings", {}),
             }, ensure_ascii=False)).replace("%DARK%", "true" if dark else "false")
             html = html.replace("</head>", mock + "</head>")
             raw = html.encode("utf-8")

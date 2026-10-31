@@ -160,18 +160,29 @@ def gate_detail(now: datetime, state: dict, cfg: dict) -> list[dict]:
     last_sent = float(state.get("last_sent") or 0)
     min_idle = int(cfg.get("min_idle_minutes", 90))
     gap = int(state.get("next_gap") or 0)
-    idle_minutes = (now.timestamp() - last_active) / 60 if last_active else 1e9
-    since_sent = (now.timestamp() - last_sent) / 60 if last_sent else 1e9
+    idle_minutes = (now.timestamp() - last_active) / 60 if last_active else None
+    since_sent = (now.timestamp() - last_sent) / 60 if last_sent else None
+    # 没有记录时不能拿 1e9 当分钟数显示出去——面板上会出现「1000000000 分钟」。
+    if idle_minutes is None:
+        idle_text = f"还没有聊过 / 要求 {min_idle}"
+    else:
+        idle_text = f"空闲 {idle_minutes:.0f} 分钟 / 要求 {min_idle}"
+    if since_sent is None:
+        gap_text = "还没主动说过话"
+    elif gap <= 0:
+        gap_text = f"距上次主动 {since_sent:.0f} 分钟 / 不限间隔"
+    else:
+        gap_text = f"距上次主动 {since_sent:.0f} 分钟 / 间隔 {gap}"
     return [
         {
             "key": "idle",
-            "ok": idle_minutes >= min_idle,
-            "detail": f"空闲 {idle_minutes:.0f} 分钟 / 要求 {min_idle}",
+            "ok": idle_minutes is None or idle_minutes >= min_idle,
+            "detail": idle_text,
         },
         {
             "key": "gap",
-            "ok": since_sent >= gap,
-            "detail": f"距上次主动 {since_sent:.0f} 分钟 / 间隔 {gap}",
+            "ok": since_sent is None or since_sent >= gap,
+            "detail": gap_text,
         },
     ]
 
