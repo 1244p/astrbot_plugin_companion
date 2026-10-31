@@ -143,17 +143,20 @@ class PersonaTest(unittest.TestCase):
     def test_apply_deltas_reports_spend(self):
         cfg = Config.load({})
         traits = {k: 0.5 for k in cfg.baseline}
-        new, spent = persona.apply_deltas(
+        new, spent, applied = persona.apply_deltas(
             traits, {"warmth": 0.06, "intimacy": 0.06}, cfg, cfg.baseline, hours=24
         )
-        self.assertAlmostEqual(new["warmth"], 0.53, places=3)
-        self.assertAlmostEqual(spent, 0.06, places=3)
+        # 两维都要 +0.03（单次上限），合计 0.06 会超过单次额度（预算的 1/3 = 0.05），
+        # 所以等比缩到各 +0.025。
+        self.assertAlmostEqual(applied["warmth"], 0.025, places=3)
+        self.assertAlmostEqual(new["warmth"], 0.525, places=3)
+        self.assertAlmostEqual(spent, 0.05, places=3)
 
     def test_frequent_flushes_barely_move(self):
         cfg = Config.load({})
         traits = {k: 0.5 for k in cfg.baseline}
         for _ in range(20):
-            traits, _ = persona.apply_deltas(
+            traits, _, _ = persona.apply_deltas(
                 traits, {"warmth": 0.06}, cfg, cfg.baseline, hours=1 / 60
             )
         self.assertLess(traits["warmth"] - 0.5, 0.01)
@@ -163,11 +166,44 @@ class PersonaTest(unittest.TestCase):
         traits = {k: 0.5 for k in cfg.baseline}
         used = 0.0
         for _ in range(50):
-            traits, spent = persona.apply_deltas(
+            traits, spent, _ = persona.apply_deltas(
                 traits, {"warmth": 0.06}, cfg, cfg.baseline, hours=24, daily_used=used
             )
             used += spent
         self.assertLessEqual(used, cfg.persona_daily_budget + 1e-6)
+
+
+    def test_budget_is_shared_across_traits(self):
+        """五个维度一起推，一天总计也不能超过预算（旧版每维各花一份剩余额度）。"""
+        cfg = Config.load({})
+        traits = {k: 0.5 for k in cfg.baseline}
+        used = 0.0
+        for _ in range(30):
+            traits, spent, _ = persona.apply_deltas(
+                traits, {k: 0.2 for k in cfg.baseline}, cfg, cfg.baseline,
+                hours=24, daily_used=used,
+            )
+            used += spent
+        self.assertLessEqual(used, cfg.persona_daily_budget + 1e-6)
+        total_move = sum(traits[k] - cfg.baseline[k] for k in cfg.baseline)
+        self.assertLessEqual(total_move, cfg.persona_daily_budget + 1e-3)
+
+    def test_single_evolve_spends_at_most_third_of_budget(self):
+        cfg = Config.load({})
+        traits = {k: 0.5 for k in cfg.baseline}
+        _, spent, _ = persona.apply_deltas(
+            traits, {k: 0.2 for k in cfg.baseline}, cfg, cfg.baseline, hours=24
+        )
+        self.assertLessEqual(spent, cfg.persona_daily_budget / 3 + 1e-6)
+
+    def test_applied_deltas_match_trait_movement(self):
+        cfg = Config.load({})
+        traits = {k: 0.5 for k in cfg.baseline}
+        new, spent, applied = persona.apply_deltas(
+            traits, {"warmth": 0.06}, cfg, cfg.baseline, hours=1 / 60
+        )
+        self.assertAlmostEqual(new["warmth"] - traits["warmth"], applied["warmth"], places=4)
+        self.assertAlmostEqual(abs(applied["warmth"]), spent, places=4)
 
     def test_render_block_skips_small_deviation(self):
         baseline = {k: 0.5 for k in ("intimacy", "playfulness", "directness", "initiative", "warmth")}

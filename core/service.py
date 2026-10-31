@@ -155,15 +155,16 @@ class Service:
         hours = 24.0
         if state["last_evolve_at"]:
             hours = min(24.0, max(0.0, (now.timestamp() - state["last_evolve_at"]) / 3600))
-        traits, spent = persona.apply_deltas(
+        traits, spent, applied = persona.apply_deltas(
             state["traits"], deltas, self.cfg, self.cfg.baseline,
             hours=hours, daily_used=used,
         )
         if spent <= 0:
             self.journal.write("DEBUG", "persona.budget", "今日预算用完，只回归不前进")
             return {}
+        # 记实际位移，不记模型要的位移：时间线上的胶囊必须能和 traits 对上
         saved = self.people.save(
-            scope, traits, deltas, why or reason, today, round(used + spent, 4)
+            scope, traits, applied, why or reason, today, round(used + spent, 4)
         )
         self.journal.write(
             "INFO", "persona.evolve", why or reason,

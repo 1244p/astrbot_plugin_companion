@@ -49,24 +49,48 @@ def apply_deltas(
     baseline: dict,
     hours: float = 24.0,
     daily_used: float = 0.0,
-) -> tuple[dict, float]:
-    """返回 (新五维, 本次实际花掉的预算)。"""
-    step = move_step(cfg.max_step, hours, daily_used, cfg.persona_daily_budget)
+) -> tuple[dict, float, dict]:
+    """返回 (新五维, 本次实际花掉的预算, 每维实际位移)。
+
+    预算必须**五维共享**：早期版本把它当成「每维可用余额」，五维各花剩余额度，
+    一天能花出去五倍预算。所以这里先按单次上限截，再按剩余总额等比缩。
+    另外单次最多花掉当日预算的三分之一——否则一次抽取就能把一天用完。
+
+    第三个返回值是**实际**位移，要写进 persona_log：模型要了 +4、实际只加了 +0.0001
+    的时候，时间线上必须显示 0，否则面板上的数字和实际人格对不上。
+    """
+    budget = cfg.persona_daily_budget
+    step = move_step(cfg.max_step, hours, daily_used, budget)
     relax = relax_factor(hours, cfg.persona_half_life_days)
-    out = {}
-    spent = 0.0
+    remain_total = max(0.0, budget - max(0.0, daily_used))
+    single_cap = remain_total if budget <= 0 else min(remain_total, budget / 3.0)
+
+    wanted_by_trait = {}
+    pulled_by_trait = {}
     for key in TRAIT_KEYS:
         base = clamp(float(baseline.get(key, 0.5)))
         current = clamp(float(traits.get(key, base)))
-        pulled = current + (base - current) * relax
+        pulled_by_trait[key] = current + (base - current) * relax
         try:
             wanted = float(deltas.get(key, 0.0))
         except (TypeError, ValueError):
             wanted = 0.0
-        applied = max(-step, min(step, wanted))
-        out[key] = round(clamp(pulled + applied), 4)
-        spent += abs(applied)
-    return out, round(spent, 4)
+        wanted_by_trait[key] = max(-step, min(step, wanted))
+
+    total = sum(abs(value) for value in wanted_by_trait.values())
+    scale = 1.0
+    if total > single_cap:
+        scale = (single_cap / total) if total > 0 else 0.0
+
+    out = {}
+    applied = {}
+    spent = 0.0
+    for key in TRAIT_KEYS:
+        delta = wanted_by_trait[key] * scale
+        out[key] = round(clamp(pulled_by_trait[key] + delta), 4)
+        applied[key] = round(delta, 4)
+        spent += abs(delta)
+    return out, round(spent, 4), applied
 
 
 def render_block(traits: dict, baseline: dict, max_chars: int) -> str:
