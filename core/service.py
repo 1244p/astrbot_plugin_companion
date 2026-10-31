@@ -106,7 +106,6 @@ class Service:
                 confidence=item["confidence"],
                 polarity=item["polarity"],
                 source=reason,
-                vector_model=self._embed_model(),
             )
             try:
                 fact, action = self.facts.write(fact)

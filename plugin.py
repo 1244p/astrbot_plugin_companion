@@ -23,6 +23,7 @@ from .core.journal import Journal
 from .core.service import Service
 
 PLUGIN_NAME = "astrbot_plugin_companion"
+Routes.PLUGIN_NAME = PLUGIN_NAME
 TICK_SECONDS = 20
 JANITOR_EVERY = 3  # 每 3 个 tick（60 秒）检查一次主动消息
 

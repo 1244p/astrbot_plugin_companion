@@ -122,6 +122,13 @@ class ServiceTest(unittest.TestCase):
         block = self.run_async(service.injection("s", "香菜"))
         self.assertIn("不吃香菜", block)
 
+    def test_fact_without_embedding_has_no_vector_flag(self):
+        self.service.push("s", "用户：香菜别放")
+        self.run_async(self.service.flush("s"))
+        fact = self.service.facts.list_facts("s")[0]
+        self.assertFalse(fact.vector)
+        self.assertEqual(fact.vector_model, "")
+
     def test_explain_returns_scores(self):
         self.service.push("s", "用户：香菜别放")
         self.run_async(self.service.flush("s"))

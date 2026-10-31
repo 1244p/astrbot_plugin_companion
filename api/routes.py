@@ -6,15 +6,15 @@
 
 from __future__ import annotations
 
-import json
-import os
-import time
+from ..core import care
 
 try:
     from astrbot.api.web import json_response, request
 except Exception:  # pragma: no cover - 老版本框架没有 web 模块
     json_response = None
     request = None
+
+PLUGIN_NAME = "astrbot_plugin_companion"
 
 FACT_FIELDS = (
     "id", "slot", "content", "kind", "importance", "confidence", "polarity",
@@ -41,7 +41,8 @@ def _scope_label(scope: str) -> str:
 class Routes:
     def __init__(self, plugin):
         self.plugin = plugin
-        self.prefix = f"/{plugin.__class__.__module__.split('.')[0]}/api"
+        name = getattr(plugin, "PLUGIN_NAME", "") or PLUGIN_NAME
+        self.prefix = f"/{name}/api"
 
     # ---------- 注册 ----------
 
@@ -99,7 +100,7 @@ class Routes:
 
     def _fact_json(self, fact) -> dict:
         data = {key: getattr(fact, key) for key in FACT_FIELDS}
-        data["has_vector"] = bool(fact.vector_model)
+        data["has_vector"] = bool(fact.vector)
         return data
 
     # ---------- 处理 ----------
@@ -219,9 +220,7 @@ class Routes:
                 "unanswered": state["unanswered"],
                 "last_text": state["last_text"],
                 "last_sent": state["last_sent"],
-                "gates": __import__("core.care", fromlist=["care"]).gate_detail(
-                    now, state, self.plugin.cfg.care_block()
-                ),
+                    "gates": care.gate_detail(now, state, self.plugin.cfg.care_block()),
             }
         )
 
