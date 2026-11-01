@@ -18,7 +18,8 @@ from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star
 
 from .api.routes import Routes
-from .core import care, db, deliver, extract
+from .core import care, db, extract
+from .core.deliver import deliver
 from .core.config import Config
 from .core.journal import Journal
 from .core.service import Service
@@ -373,7 +374,9 @@ class CompanionPlugin(Star):
             return False
         self._care_error.pop(scope, None)
         self.service.care.mark_sent(scope, now.timestamp(), text, gap, care.day_key(now))
-        self.journal.write("INFO", "care.sent", text[:40], scope=scope, gap=gap,
+        # 自己说过的话也要进对话缓冲：否则下一轮抽取和对话都当它没发生过。
+        self.service.push(scope, text)
+        self.journal.write("INFO", "care.sent", text[:200], scope=scope, gap=gap,
                            parts=delivered, stopped_at=result["stopped_at"])
         return True
 

@@ -193,6 +193,21 @@ class Service:
         blocks = []
         if memory:
             blocks.append("<memory>\n" + memory + "\n</memory>")
+        said = self.care.get(scope) if self.cfg.care_echo_hours > 0 else {}
+        last_text = (said.get("last_text") or "").strip()
+        last_stamp = float(said.get("last_sent") or 0)
+        if last_text and last_stamp:
+            hours = (time.time() - last_stamp) / 3600
+            if hours <= self.cfg.care_echo_hours:
+                minutes = int(hours * 60)
+                when = "刚刚" if minutes < 1 else (
+                    f"{minutes} 分钟前" if hours < 1 else f"{hours:.1f} 小时前")
+                blocks.append(
+                    "<said_recently>" + "\n"
+                    + f"你{when}主动说过：{last_text[:120]}" + "\n"
+                    + "这是你自己说过的话，别当对方说的，也别重复。" + "\n"
+                    + "</said_recently>"
+                )
         if self.cfg.persona_inject:
             state = self.people.get(scope)
             tone = persona.render_block(state["traits"], self.cfg.baseline,
@@ -255,11 +270,16 @@ class Service:
         facts = self.facts.recall(scope, "", None) or self.facts.known(scope, 6)
         memory = render_block(facts, self.cfg.max_inject_chars)
         tone = persona.render_block(state["traits"], self.cfg.baseline, 120)
+        last = (self.care.get(scope).get("last_text") or "").strip()
+        echo = ""
+        if last and self.cfg.care_echo_hours > 0:
+            echo = f"你上次主动说过：{last[:80]}（换个说法，别重复这句）" + "\n"
         return (
-            "你要主动给对方发一条消息。\n"
-            f"你们的关系记录：\n{memory or '（还没什么记录）'}\n"
-            f"你此刻的说话倾向：{tone or '平常'}\n"
-            f"要求：一句到两句，不超过 {self.cfg.care_max_chars} 字，像人随口说的，"
-            "不要提问式寒暄，不要复述上面的记录。\n"
-            '输出 JSON：{"send": true, "text": "要说的话", "gap": 下次间隔分钟数(15-240)}'
+            echo
+            + "你要主动给对方发一条消息。" + "\n"
+            + "你们的关系记录：" + "\n" + (memory or "（还没什么记录）") + "\n"
+            + f"你此刻的说话倾向：{tone or '平常'}" + "\n"
+            + f"要求：一句到两句，不超过 {self.cfg.care_max_chars} 字，像人随口说的，"
+            + "不要提问式寒暄，不要复述上面的记录。" + "\n"
+            + '输出 JSON：{"send": true, "text": "要说的话", "gap": 下次间隔分钟数(15-240)}'
         )

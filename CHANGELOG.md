@@ -2,6 +2,24 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+
+## [v0.1.15] - 2026-11-01
+
+### 修复
+- `/memory care test` 报 `'module' object is not callable`：`main.py` 写的是 `from .core import deliver`（拿到的是模块），却当函数 `await deliver(...)` 调用。改为 `from .core.deliver import deliver`。
+- **主动消息说过的话，模型自己不知道**：`care.sent` 只写进插件日志（且截断 40 字），`care.last_text` 只写不读，对话缓冲里也没有这条 → 下一轮模型既不知道刚说过什么，用户接着回复时还会被当成新话题的开头。
+  - 发送成功后把这句话压进对话缓冲（`Service.push`），抽取与后续上下文都能看到。
+  - `care_prompt` 开头加「你上次主动说过：…（换个说法，别重复这句）」。
+  - `injection` 在记录尚新时注入 `<said_recently>你刚刚主动说过：…（这是你自己说过的话，别当对方说的）</said_recently>`。
+  - 新增配置 `care_echo_hours`（默认 6 小时，0 = 不注入）。
+- `care.sent` 记录长度 40 → 200 字，日志里能看到完整一句。
+
+### 防护
+- `ImportShapeTest`：`main.py` 必须 `from .core.deliver import deliver`，且 `from .core import ...` 里不许出现 `deliver`；另断言 `core.deliver.deliver` 是 coroutine function。
+
+### 测试
+- 新增 `CareEchoTest`（4 条）：近期主动消息进注入、过期不进、`care_prompt` 带上上次发言、`care_echo_hours=0` 时两处都不注入。全量 123 → 129。
+
 ## [v0.1.14] - 2026-11-01
 
 ### 修复

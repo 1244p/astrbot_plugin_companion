@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -182,6 +183,50 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(schema.group_of("care_enable"), "care")
         self.assertEqual(schema.group_of("persona_max_chars"), "persona")
         self.assertEqual(schema.group_of("something_new"), "basic")
+
+
+class CareEchoTest(unittest.TestCase):
+    """主动说过的话必须留痕：else 模型下一轮不知道自己刚说了什么。"""
+
+    def make_service(self):
+        handle, path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        conn = db.connect(path)
+        cfg = Config.load({"care_echo_hours": 6.0})
+        service = Service(conn, cfg, Journal(tempfile.mkdtemp(), level="DEBUG"),
+                          FakeLLM())
+        return service, conn
+
+    def test_injection_echoes_recent_care(self):
+        service, conn = self.make_service()
+        service.care.mark_sent("s1", time.time() - 600, "刚差点笑出声", 90, "2026-11-01")
+        block = asyncio.run(service.injection("s1", "你在笑什么"))
+        self.assertIn("<said_recently>", block)
+        self.assertIn("刚差点笑出声", block)
+        conn.close()
+
+    def test_injection_skips_stale_care(self):
+        service, conn = self.make_service()
+        service.care.mark_sent("s1", time.time() - 48 * 3600, "很久以前说的话", 90, "2026-10-30")
+        block = asyncio.run(service.injection("s1", "早"))
+        self.assertNotIn("said_recently", block)
+        conn.close()
+
+    def test_care_prompt_mentions_last_text(self):
+        service, conn = self.make_service()
+        service.care.mark_sent("s1", time.time(), "我说过这句", 90, "2026-11-01")
+        prompt = service.care_prompt("s1")
+        self.assertIn("我说过这句", prompt)
+        self.assertIn("别重复", prompt)
+        conn.close()
+
+    def test_echo_can_be_disabled(self):
+        service, conn = self.make_service()
+        service.cfg.care_echo_hours = 0.0
+        service.care.mark_sent("s1", time.time(), "我说过这句", 90, "2026-11-01")
+        self.assertNotIn("我说过这句", service.care_prompt("s1"))
+        self.assertNotIn("said_recently", asyncio.run(service.injection("s1", "嗯")))
+        conn.close()
 
 
 if __name__ == "__main__":

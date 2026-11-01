@@ -244,5 +244,11 @@
     "description": "主动消息用的提供商 ID",
     "hint": "留空用当前会话模型",
     "default": ""
+  },
+  "care_echo_hours": {
+    "type": "float",
+    "description": "多久内说过的话会告诉模型",
+    "hint": "主动消息发出后这个时间内，下一轮对话会把它当成「你刚说过」注入，避免重复或否认。0 表示不注入",
+    "default": 6.0
   }
 }

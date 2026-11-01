@@ -107,5 +107,23 @@ class SourceGuardTest(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+class ImportShapeTest(unittest.TestCase):
+    """`from .core import deliver` 拿到的是模块，`await deliver(...)` 会炸成
+    "'module' object is not callable"。v0.1.14 就这么挂过一次，这里钉死写法。"""
+
+    def test_main_imports_the_function_not_the_module(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "main.py"), encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("from .core.deliver import deliver", source)
+        for line in source.splitlines():
+            if line.startswith("from .core import"):
+                self.assertNotIn("deliver", line, line)
+
+    def test_deliver_is_a_coroutine_function(self):
+        import inspect
+        self.assertTrue(inspect.iscoroutinefunction(deliver.deliver))
+
+
 if __name__ == "__main__":
     unittest.main()

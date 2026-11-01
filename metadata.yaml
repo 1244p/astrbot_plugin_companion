@@ -1,7 +1,7 @@
 name: astrbot_plugin_companion
 display_name: 陪伴记忆
 desc: 私聊陪伴用的长期记忆：记住偏好与在办的事，人格按真实时间缓慢演化，安静久了会主动开口。全本地、零依赖。
-version: v0.1.14
+version: v0.1.15
 author: 1244p
 repo: https://github.com/1244p/astrbot_plugin_companion
 astrbot_version: ">=4.9.0"
