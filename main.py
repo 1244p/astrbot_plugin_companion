@@ -76,6 +76,8 @@ class CompanionPlugin(Star):
         self._tick = 0
         self._task: asyncio.Task | None = None
         self._seen: dict[str, dict] = {}
+        self._care_error: dict[str, str] = {}
+        self._care_fail_until: dict[str, float] = {}
         self.routes = Routes(self)
         # 不调这一句，面板拿到的每个接口都会是「未找到该路由」——页面能开，但一片空白。
         self.routes.register()
@@ -323,6 +325,8 @@ class CompanionPlugin(Star):
             self.service.care.mark_skipped(scope, now.timestamp(), reason)
             self.journal.write("DEBUG", "care.skip", care.reason_text(reason), scope=scope)
             return False
+        if now.timestamp() < self._care_fail_until.get(scope, 0.0):
+            return False  # 上一轮生成失败，退避期内不再敲模型
         try:
             provider = await self._provider(self.cfg.care_provider_id or "", scope)
             if provider is None:
@@ -333,7 +337,13 @@ class CompanionPlugin(Star):
             data = extract.extract_json(getattr(resp, "completion_text", "") or "")
             parsed = care.sanitize_reply(data or {}, self.cfg.care_max_chars)
         except Exception as error:  # noqa: BLE001
-            self.journal.write("ERROR", "care.fail", f"生成失败：{error}", scope=scope)
+            text = f"生成失败：{error}"
+            # 同一会话同一个错误只记一次：配置类问题会每 60 秒重试，日志会被刷成墙。
+            if self._care_error.get(scope) != text:
+                self._care_error[scope] = text
+                self.journal.write("ERROR", "care.fail", text, scope=scope)
+            self.journal.write("DEBUG", "care.backoff", "5 分钟内不再尝试", scope=scope)
+            self._care_fail_until[scope] = now.timestamp() + 300
             return False
         if not parsed:
             self.service.care.mark_skipped(scope, now.timestamp(), "no_prompt")
@@ -354,6 +364,7 @@ class CompanionPlugin(Star):
                 break
         if not delivered:
             return False
+        self._care_error.pop(scope, None)
         self.service.care.mark_sent(scope, now.timestamp(), text, gap, care.day_key(now))
         self.journal.write("INFO", "care.sent", text[:40], scope=scope, gap=gap, parts=delivered)
         return True

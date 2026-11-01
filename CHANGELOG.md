@@ -2,6 +2,15 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.1.13] - 2026-11-01
+
+### 修复
+- 日志被 `ERROR care.fail 生成失败：'Config' object has no attribute 'care_provider_id'` 刷屏（一分钟一条，每次 tick 一条）：`main.py` 读 `self.cfg.care_provider_id`，但 `Config` 与 `_conf_schema.json` 里都没有这一项。
+  - `core/config.py` 补 `care_provider_id: str = ""`；`_conf_schema.json` 补同名配置项（设置页显示为提供商下拉，留空跟随当前会话模型）。
+- 同一会话的同一个生成错误只记一次日志；失败后该会话退避 5 分钟再试，不再每分钟敲一次模型。
+
+### 防护
+- 新增 `ConfigAttrTest`：扫源码里所有 `cfg.<attr>`，逐个核对 `Config` 上是否真有这个字段。这类「配置项名字写错 → 运行时 AttributeError」的问题以后会直接被测试拦下。
 ## [v0.1.12] - 2026-10-31
 
 ### 修复

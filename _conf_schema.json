@@ -238,5 +238,11 @@
     },
     "description": "人格基线",
     "hint": "演化会朝这里回"
+  },
+  "care_provider_id": {
+    "type": "string",
+    "description": "主动消息用的提供商 ID",
+    "hint": "留空就跟随当前会话模型。刷屏的 ERROR care.fail 就是因为缺这一项（v0.1.13 已补）",
+    "default": ""
   }
 }

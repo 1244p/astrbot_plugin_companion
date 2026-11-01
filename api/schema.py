@@ -166,6 +166,7 @@ STATIC_OPTIONS = {
 CHOICE_KEYS = {
     "extract_provider_id": "provider_choices",
     "embedding_provider_id": "embedding_choices",
+    "care_provider_id": "provider_choices",
 }
 
 

@@ -97,6 +97,7 @@ class Config:
     care_probability: float = 0.85
     care_max_chars: int = 45
     care_timezone: str = "Asia/Shanghai"
+    care_provider_id: str = ""
     care_split: bool = True
     care_split_max: int = 2
     care_split_delay: float = 1.2
@@ -145,6 +146,7 @@ class Config:
             care_probability=_float(g("care_probability"), 0.85, 0.0, 1.0),
             care_max_chars=_int(g("care_max_chars"), 45, 10, 200),
             care_timezone=_str(g("care_timezone"), "Asia/Shanghai"),
+            care_provider_id=_str(g("care_provider_id"), ""),
             care_split=_bool(g("care_split"), True),
             care_split_max=_int(g("care_split_max"), 2, 1, 4),
             care_split_delay=_float(g("care_split_delay"), 1.2, 0.0, 10.0),

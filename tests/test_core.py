@@ -537,6 +537,32 @@ class LegacyKindTest(unittest.TestCase):
         self.assertIsNotNone(row.vector)
         conn.close()
 
+class ConfigAttrTest(unittest.TestCase):
+    """配置项名字打错会变成运行时 AttributeError（v0.1.13 的 care.fail 刷屏就是这样）。
+    这里扫源码里所有 cfg.<name>，要求每一处都能在 Config 上找到。"""
+
+    def test_every_cfg_attribute_exists(self):
+        import re
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        fields = set(Config.__dataclass_fields__)
+        # care_block 是 Config 的方法；core/care.py 里的 .get 属于普通 dict，不是 Config
+        allowed = {"care_block", "get"}
+        missing = {}
+        for name in ("main.py", "api/routes.py", "core/service.py", "core/facts.py",
+                     "core/care.py", "core/persona.py", "core/state.py"):
+            path = os.path.join(root, name)
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            for match in re.finditer(r"cfg\.[a-z_][a-z0-9_]*", text):
+                attr = match.group(0).split(".", 1)[1]
+                if attr not in fields and attr not in allowed:
+                    missing.setdefault(name, set()).add(attr)
+        self.assertEqual(missing, {})
+
+    def test_care_provider_id_defaults_to_empty(self):
+        cfg = Config.load({})
+        self.assertEqual(cfg.care_provider_id, "")
+
 
 if __name__ == "__main__":
     unittest.main()
