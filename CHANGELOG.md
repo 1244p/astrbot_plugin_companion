@@ -2,6 +2,19 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.1.14] - 2026-11-01
+
+### 修复
+- **主动消息发不出去（日志却写「已发送」）**：`main.py` 调 `self.context.send_message(...)` 没有 `await`。框架这个方法本身是 `async def ... -> bool`，不 await 拿到的是一个永远为真的 coroutine 对象，于是每段都算「发成功」、`care.sent` 照写，用户那边一条也收不到。
+  - 抽出 `core/deliver.py`：`deliver(sender, scope, text, ...)` 统一 await、逐段计数，返回 `{delivered, parts, error, stopped_at}`。
+  - `main.py` 新增 `_send_plain()`，所有发送都经它走，日志带上平台返回。
+- 发送抛异常时记 `ERROR care.send_fail` 并带原始报错（如配额限制），该会话退避 5 分钟。
+
+### 新增
+- `/memory care test`：立刻发一条测试消息，并把平台返回值直接回显。这是判断「通道通不通」最快的一条命令。
+
+### 防护
+- `tests/test_deliver.py`（8 条）：async sender 必须被 await、逐段发送、平台拒收即停、异常带原因、同步 sender 兼容、段间隔生效、无 "never awaited" 警告；另有源码级断言——`main.py` 里任何 `context.send_message(` 都必须同行带 `await`。
 ## [v0.1.13] - 2026-11-01
 
 ### 修复

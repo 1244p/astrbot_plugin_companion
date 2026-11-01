@@ -18,7 +18,7 @@ from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star
 
 from .api.routes import Routes
-from .core import care, db, extract
+from .core import care, db, deliver, extract
 from .core.config import Config
 from .core.journal import Journal
 from .core.service import Service
@@ -37,7 +37,7 @@ HELP = (
     "/memory forget <id>   删除一条\n"
     "/memory confirm <id>  把待确认的条目认下来\n"
     "/memory persona      看人格五维\n"
-    "/memory care on|off|status|now|why\n"
+    "/memory care on|off|status|now|why|test\n"
     "/memory logs [n]      看插件自己的日志\n"
     "/memory settings      （面板里改更方便）\n"
     "/memory done <id>     把任务标记完成\n"
@@ -204,6 +204,11 @@ class CompanionPlugin(Star):
 
     # ---------- 模型 ----------
 
+    async def _send_plain(self, scope: str, text: str) -> bool:
+        """框架的 send_message 是 async 的，这里必须 await：
+        不 await 拿到的 coroutine 恒为真，日志写「已发送」而用户什么也收不到。"""
+        return await self.context.send_message(scope, MessageChain([Plain(text)]))
+
     async def _provider(self, provider_id: str, umo: str = ""):
         if provider_id:
             provider = self.context.get_provider_by_id(provider_id)
@@ -350,23 +355,26 @@ class CompanionPlugin(Star):
             return False
 
         text, gap = parsed
-        parts = care.split_sentences(text, self.cfg.care_split_max) if self.cfg.care_split else [text]
-        delivered = 0
-        for index, part in enumerate(parts):
-            if index:
-                await asyncio.sleep(self.cfg.care_split_delay)
-            if self.context.send_message(scope, MessageChain([Plain(part)])):
-                delivered += 1
-                if self.cfg.care_split_delay and index:
-                    await asyncio.sleep(self.cfg.care_split_delay)
-            else:
-                self.journal.write("WARN", "care.send_fail", "平台没接住", scope=scope, part=index)
-                break
+        result = await deliver(
+            self._send_plain, scope, text,
+            split=self.cfg.care_split,
+            max_parts=self.cfg.care_split_max,
+            delay=self.cfg.care_split_delay,
+        )
+        delivered = result["delivered"]
+        if result["error"]:
+            self.journal.write("ERROR", "care.send_fail", result["error"],
+                               scope=scope, part=result["stopped_at"])
+            self._care_fail_until[scope] = now.timestamp() + 300
+            return False
         if not delivered:
+            self.journal.write("WARN", "care.send_fail", "平台没接住",
+                               scope=scope, part=result["stopped_at"])
             return False
         self._care_error.pop(scope, None)
         self.service.care.mark_sent(scope, now.timestamp(), text, gap, care.day_key(now))
-        self.journal.write("INFO", "care.sent", text[:40], scope=scope, gap=gap, parts=delivered)
+        self.journal.write("INFO", "care.sent", text[:40], scope=scope, gap=gap,
+                           parts=delivered, stopped_at=result["stopped_at"])
         return True
 
     @property
@@ -481,6 +489,15 @@ class CompanionPlugin(Star):
             if action == "now":
                 sent = await self._maybe_care(scope, force=True)
                 yield event.plain_result("发出去了。" if sent else "这次没发，用 /memory care why 看原因。")
+                return
+            if action == "test":
+                text = "这是一条测试消息，收到就说明主动消息通道是通的。"
+                result = await deliver(self._send_plain, scope, text, split=False)
+                self.journal.write("INFO", "care.test", text, scope=scope,
+                                   delivered=result["delivered"], error=result["error"])
+                detail = "已送达" if result["delivered"] else "没有送达"
+                extra = f"｜{result['error']}" if result["error"] else ""
+                yield event.plain_result(f"{detail}（segments={result['delivered']}）{extra}")
                 return
             if action == "why":
                 (ok, reason), now = self.service.care_decide(scope)

@@ -1,5 +1,5 @@
 /* 面板前端：只依赖宿主注入的 window.AstrBotPluginView，不引第三方库。 */
-window.__companionBuild = "0.1.13";
+window.__companionBuild = "0.1.14";
 
 (function () {
   "use strict";
